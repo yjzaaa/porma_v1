@@ -38,7 +38,7 @@ import {
   deleteSkillEntry,
   renameSkillEntry,
 } from '../lib/agent/agent-workspace-manager'
-import { getWorkspaceSkillsDir } from '../lib/config-paths'
+import { getWorkspaceSkillsDir } from '../lib/storage/config-paths'
 import { runAgent, stopAgent, queueAgentMessage } from '../lib/agent/agent-service'
 import { getAgentSessionMeta } from '../lib/agent/agent-session-manager'
 import { feishuBridgeManager } from '../lib/feishu/feishu-bridge-manager'
@@ -119,7 +119,7 @@ export function registerAgentWorkspaceHandlers(): void {
   ipcMain.handle(
     AGENT_IPC_CHANNELS.TEST_MCP_SERVER,
     async (_, name: string, entry: import('@proma/shared').McpServerEntry): Promise<{ success: boolean; message: string }> => {
-      const { validateMcpServer } = await import('../lib/mcp-validator')
+      const { validateMcpServer } = await import('../lib/agent/mcp-validator')
       const result = await validateMcpServer(name, entry)
       return {
         success: result.valid,

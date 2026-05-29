@@ -7,8 +7,8 @@
 
 import type { ToolCall, ToolResult, ToolDefinition } from '@proma/core'
 import type { ChatToolMeta } from '@proma/shared'
-import { getMemoryConfig } from '../memory-service'
-import { searchMemory, addMemory, formatSearchResult } from '../memos-client'
+import { getMemoryConfig } from '../memory/memory-service'
+import { searchMemory, addMemory, formatSearchResult } from '../memory/memos-client'
 
 // ===== 工具元数据 =====
 

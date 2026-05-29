@@ -22,7 +22,7 @@ import type {
 } from '@proma/shared'
 import { getAgentSessionMeta, updateAgentSessionMeta } from '../lib/agent/agent-session-manager'
 import { saveFilesToAgentSession, saveFilesToWorkspaceFiles } from '../lib/agent/agent-service'
-import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getWorkspaceFilesDir } from '../lib/config-paths'
+import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getWorkspaceFilesDir } from '../lib/storage/config-paths'
 import {
   getAgentWorkspace,
   getWorkspaceAttachedDirectories,
@@ -32,9 +32,9 @@ import {
   detachWorkspaceDirectory,
   detachWorkspaceFile,
 } from '../lib/agent/agent-workspace-manager'
-import { watchAttachedDirectory, unwatchAttachedDirectory } from '../lib/workspace-watcher'
+import { watchAttachedDirectory, unwatchAttachedDirectory } from '../lib/file/workspace-watcher'
 import { normalizeFileAccessOptions, isPathAllowed, getAllowedCandidateBasePaths, HIDDEN_FS_ENTRIES } from './helpers'
-import { registerPromaFilePath } from '../lib/local-file-protocol'
+import { registerPromaFilePath } from '../lib/system/local-file-protocol'
 
 export function registerAgentFileHandlers(): void {
   // ===== Agent 附件 =====
@@ -358,7 +358,7 @@ export function registerAgentFileHandlers(): void {
   ipcMain.handle(
     'file:resolve-and-read',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<{ resolvedPath: string; content: string } | null> => {
-      const { resolveAndReadFile, resolveFilePath } = await import('../lib/file-preview-service')
+      const { resolveAndReadFile, resolveFilePath } = await import('../lib/file/file-preview-service')
       const options = normalizeFileAccessOptions(access)
       const allowedBasePaths = getAllowedCandidateBasePaths(options)
       const resolved = resolveFilePath(filePath, allowedBasePaths)
@@ -377,7 +377,7 @@ export function registerAgentFileHandlers(): void {
     async (_, filePath: string, content: string, access?: FileAccessOptions | string[]): Promise<boolean> => {
       if (typeof content !== 'string') return false
       const { writeFileSync } = await import('node:fs')
-      const { resolveFilePath } = await import('../lib/file-preview-service')
+      const { resolveFilePath } = await import('../lib/file/file-preview-service')
       const options = normalizeFileAccessOptions(access)
       const allowedBasePaths = getAllowedCandidateBasePaths(options)
       const resolved = resolveFilePath(filePath, allowedBasePaths)
@@ -394,7 +394,7 @@ export function registerAgentFileHandlers(): void {
   ipcMain.handle(
     'file:resolve-path',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<ResolvedFileUrl | null> => {
-      const { resolveFilePath } = await import('../lib/file-preview-service')
+      const { resolveFilePath } = await import('../lib/file/file-preview-service')
       const options = normalizeFileAccessOptions(access)
       const result = resolveFilePath(filePath, getAllowedCandidateBasePaths(options))
       if (result && !isPathAllowed(result, options)) {
@@ -409,7 +409,7 @@ export function registerAgentFileHandlers(): void {
   ipcMain.handle(
     'file:prepare-pdf-preview',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<{ tmpHtmlUrl: string } | null> => {
-      const { preparePdfPreview, resolveFilePath } = await import('../lib/file-preview-service')
+      const { preparePdfPreview, resolveFilePath } = await import('../lib/file/file-preview-service')
       const options = normalizeFileAccessOptions(access)
       const allowedBasePaths = getAllowedCandidateBasePaths(options)
       const resolved = resolveFilePath(filePath, allowedBasePaths)
@@ -426,7 +426,7 @@ export function registerAgentFileHandlers(): void {
   ipcMain.handle(
     'file:docx-to-html',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<{ resolvedPath: string; html: string } | null> => {
-      const { convertDocxToHtml, resolveFilePath } = await import('../lib/file-preview-service')
+      const { convertDocxToHtml, resolveFilePath } = await import('../lib/file/file-preview-service')
       const options = normalizeFileAccessOptions(access)
       const allowedBasePaths = getAllowedCandidateBasePaths(options)
       const resolved = resolveFilePath(filePath, allowedBasePaths)
@@ -443,7 +443,7 @@ export function registerAgentFileHandlers(): void {
   ipcMain.handle(
     'file:office-to-html',
     async (_, filePath: string, access?: FileAccessOptions | string[]): Promise<import('@proma/shared').OfficePreviewResult | null> => {
-      const { convertOfficeToHtml, resolveFilePath } = await import('../lib/file-preview-service')
+      const { convertOfficeToHtml, resolveFilePath } = await import('../lib/file/file-preview-service')
       const options = normalizeFileAccessOptions(access)
       const allowedBasePaths = getAllowedCandidateBasePaths(options)
       const resolved = resolveFilePath(filePath, allowedBasePaths)
@@ -460,7 +460,7 @@ export function registerAgentFileHandlers(): void {
     'file:read-binary-base64',
     async (_, filePath: string, access?: FileAccessOptions | string[], maxSize?: number): Promise<string | null> => {
       const { readFileSync, statSync } = await import('node:fs')
-      const { resolveFilePath } = await import('../lib/file-preview-service')
+      const { resolveFilePath } = await import('../lib/file/file-preview-service')
       const options = normalizeFileAccessOptions(access)
       const resolved = resolveFilePath(filePath, getAllowedCandidateBasePaths(options))
       if (!resolved || !isPathAllowed(resolved, options)) return null

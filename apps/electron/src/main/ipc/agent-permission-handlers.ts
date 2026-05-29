@@ -24,7 +24,7 @@ import { getAgentSessionMeta, updateAgentSessionMeta } from '../lib/agent/agent-
 import { permissionService } from '../lib/agent/agent-permission-service'
 import { askUserService } from '../lib/agent/agent-ask-user-service'
 import { exitPlanService } from '../lib/agent/agent-exit-plan-service'
-import { getMemoryConfig, setMemoryConfig } from '../lib/memory-service'
+import { getMemoryConfig, setMemoryConfig } from '../lib/memory/memory-service'
 import { getAllToolInfos } from '../lib/chat/chat-tool-registry'
 import { updateToolState, updateToolCredentials, getToolCredentials, addCustomTool, deleteCustomTool } from '../lib/chat/chat-tool-config'
 
@@ -131,7 +131,7 @@ export function registerAgentPermissionHandlers(): void {
         return { success: false, message: '请先填写 API Key' }
       }
       try {
-        const { searchMemory } = await import('../lib/memos-client')
+        const { searchMemory } = await import('../lib/memory/memos-client')
         const result = await searchMemory(
           { apiKey: config.apiKey, userId: config.userId?.trim() || 'proma-user', baseUrl: config.baseUrl },
           'test connection',
@@ -205,7 +205,7 @@ export function registerAgentPermissionHandlers(): void {
           return { success: false, message: '请先填写 API Key' }
         }
         try {
-          const { searchMemory } = await import('../lib/memos-client')
+          const { searchMemory } = await import('../lib/memory/memos-client')
           const result = await searchMemory(
             { apiKey: config.apiKey, userId: config.userId?.trim() || 'proma-user', baseUrl: config.baseUrl },
             'test connection',

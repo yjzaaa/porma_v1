@@ -1,6 +1,6 @@
 import { BrowserWindow, nativeTheme } from 'electron'
-import type { ThemeMode, ThemeStyle } from '../../types'
-import { getSettings } from './settings-service'
+import type { ThemeMode, ThemeStyle } from '../../../types'
+import { getSettings } from '../storage/settings-service'
 
 interface OverlayColors {
   color: string

@@ -8,11 +8,11 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { ENVIRONMENT_IPC_CHANNELS, INSTALLER_IPC_CHANNELS, PROXY_IPC_CHANNELS } from '@proma/shared'
 import type { EnvironmentCheckResult, InstallerManifest, InstallerDownloadRequest, InstallerDownloadResult, ProxyConfig, SystemProxyDetectResult } from '@proma/shared'
 import { checkEnvironment } from '../lib/runtime/environment-checker'
-import { fetchInstallerManifest, findInstallerSource } from '../lib/installer-manifest'
-import { cancelInstallerDownload, downloadInstaller, launchInstaller } from '../lib/installer-downloader'
-import { getProxySettings, saveProxySettings } from '../lib/proxy-settings-service'
-import { detectSystemProxy } from '../lib/system-proxy-detector'
-import { updateSettings } from '../lib/settings-service'
+import { fetchInstallerManifest, findInstallerSource } from '../lib/install/installer-manifest'
+import { cancelInstallerDownload, downloadInstaller, launchInstaller } from '../lib/install/installer-downloader'
+import { getProxySettings, saveProxySettings } from '../lib/network/proxy-settings-service'
+import { detectSystemProxy } from '../lib/network/system-proxy-detector'
+import { updateSettings } from '../lib/storage/settings-service'
 
 export function registerSystemHandlers(): void {
   // ===== 环境检测相关 =====

@@ -15,7 +15,7 @@ import { watch, existsSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
 import type { BrowserWindow } from 'electron'
 import { AGENT_IPC_CHANNELS } from '@proma/shared'
-import { getAgentWorkspacesDir } from './config-paths'
+import { getAgentWorkspacesDir } from '../storage/config-paths'
 
 /** debounce 延迟（ms） */
 const DEBOUNCE_MS = 300

@@ -18,8 +18,8 @@ import {
   getAttachmentsDir,
   getConversationsDir,
 } from './config-paths'
-import { listAgentSessions } from './agent/agent-session-manager'
-import { listAgentWorkspaces } from './agent/agent-workspace-manager'
+import { listAgentSessions } from '../agent/agent-session-manager'
+import { listAgentWorkspaces } from '../agent/agent-workspace-manager'
 
 // ─── 类型定义 ───
 

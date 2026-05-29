@@ -20,7 +20,7 @@ import {
   getAgentSessionWorkspacePath,
   getAgentWorkspacePath,
   getSdkConfigDir,
-} from '../config-paths'
+} from '../storage/config-paths'
 import { getAgentWorkspace } from './agent-workspace-manager'
 
 // 在模块加载时一次性设置 SDK 配置目录，避免在 forkSession 等异步调用中临时修改/恢复

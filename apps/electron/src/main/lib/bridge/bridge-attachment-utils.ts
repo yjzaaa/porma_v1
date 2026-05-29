@@ -7,7 +7,7 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve, basename, relative } from 'node:path'
-import { getAgentSessionWorkspacePath } from '../config-paths'
+import { getAgentSessionWorkspacePath } from '../storage/config-paths'
 
 /** 图片大小警告阈值 */
 export const MAX_IMAGE_SIZE = 10 * 1024 * 1024

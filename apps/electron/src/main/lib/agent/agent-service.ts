@@ -30,7 +30,7 @@ import type {
 import { ClaudeAgentAdapter, scanAndKillOrphanedClaudeSubprocesses } from '../adapters/claude-agent-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { AgentOrchestrator } from './agent-orchestrator'
-import { getAgentSessionWorkspacePath, getWorkspaceFilesDir } from '../config-paths'
+import { getAgentSessionWorkspacePath, getWorkspaceFilesDir } from '../storage/config-paths'
 import { getAgentSessionMeta } from './agent-session-manager'
 
 // ===== 实例创建 =====

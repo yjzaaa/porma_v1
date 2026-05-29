@@ -4,7 +4,7 @@
  * 处理 /help, /new, /chat, /agent, /list, /stop, /switch, /workspace, /now 命令。
  */
 import type { FeishuMessageContext } from '@proma/shared'
-import { getSettings } from '../../settings-service'
+import { getSettings } from '../../storage/settings-service'
 import {
   createAgentSession,
   listAgentSessions,
@@ -370,7 +370,7 @@ export class FeishuCommandHandler {
       }
       // 工作区文件列表
       try {
-        const { getAgentWorkspacePath } = await import('../../config-paths')
+        const { getAgentWorkspacePath } = await import('../../storage/config-paths')
         const wsPath = getAgentWorkspacePath(workspace.slug)
         const entries = readdirSync(wsPath, { withFileTypes: true })
         const fileList = entries

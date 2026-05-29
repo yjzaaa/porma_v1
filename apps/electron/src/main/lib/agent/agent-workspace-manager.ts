@@ -18,7 +18,7 @@ import {
   getInactiveSkillsDir,
   getDefaultSkillsDir,
   parseSkillVersion,
-} from '../config-paths'
+} from '../storage/config-paths'
 import type { AgentWorkspace, WorkspaceMcpConfig, SkillMeta, SkillImportSource, OtherWorkspaceSkillsGroup, WorkspaceCapabilities, SkillFileNode, SkillFileContent } from '@proma/shared'
 
 interface AgentWorkspacesIndex {

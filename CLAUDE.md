@@ -367,6 +367,51 @@ bun run generate:icons    # 生成应用图标
 - 尽可能使用 `import type` 进行仅类型导入
 - 注释和日志采用中文，保留专业术语
 - **路径别名**：`@/` → `apps/electron/src/renderer/`
+- **文件编码**: UTF-8 (无 BOM)
+- **禁止裸 JSON 返回值** — tool / API / 函数返回结构化数据时，必须使用 `interface` 或 `type` 约束，禁止直接返回未类型化的对象字面量
+- **接口与实现分离** — 接口、事件类型、数据模型等纯类型定义必须与实现代码分文件存放
+- **单文件单职责** — 一个 `.ts` 文件只放一类东西，模块入口 `index.ts` 只做汇总导出，不含任何实现
+
+### JSDoc 中文注释规范
+
+- **文件头**: `/** 模块用途说明 */` — 每个 .ts 文件顶部必须有
+- **函数/方法**: `/** 功能描述 @param xxx 参数说明 @returns 返回值说明 */`
+- **类**: `/** 类职责说明 */` + 每个 public 方法单独注释
+- **接口/类型**: `/** 用途说明 */` — 每个字段单独注释
+- **属性/字段**: `/** 描述 */` (JSDoc 单行) — 说明业务含义
+- **行内注释**: `// 简短说明` — 解释非显而易见的逻辑 (Why, 不是 What)
+- **分区注释**: `// ═══...═══` — 长文件中分隔逻辑区块
+
+## 行为准则
+
+### 1. 先思考，再编码
+
+- 实现前先明确假设，不确定时主动提问
+- 存在多种方案时，列出对比而非默默选择
+- 有更简单方案时主动指出，敢于 push back
+- 遇到不清楚的地方停下来，说清楚哪里困惑
+
+### 2. 简洁优先
+
+- 只实现需求范围内的功能，不做推测性编码
+- 不引入单次使用场景的抽象
+- 不添加未被请求的"灵活性"或"可配置性"
+- 不为不可能发生的场景添加错误处理
+
+### 3. 手术式修改
+
+- 只改必须改的，不改相邻代码、注释、格式
+- 不重构没坏的东西
+- 匹配现有风格，即使你有不同偏好
+- 发现无关死代码时只提出来，不直接删除
+- 只清理你自己的修改造成的孤立引用（import/变量/函数）
+- **检验标准**: 每一行改动都应直接追溯到需求
+
+### 4. 目标驱动执行
+
+- 把任务转化为可验证的目标："修复 bug" → "写复现测试，修到通过"
+- 多步骤任务先列简要计划: `1. [步骤] → 验证: [检查点]`
+- 强验证标准让你能独立迭代，弱标准需要反复确认
 
 ## TypeScript 配置
 
@@ -508,37 +553,19 @@ React UI 更新
 - **错误映射**：SDK 错误统一转换为应用错误
 
 <!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+# GitNexus MCP
 
-This project is indexed by GitNexus as **Proma** (15903 symbols, 26552 relationships, 294 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Proma** (4863 symbols, 13274 relationships, 289 execution flows).
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+## Always Start Here
 
-## Always Do
+1. **Read `gitnexus://repo/{name}/context`** — codebase overview + check index freshness
+2. **Match your task to a skill below** and **read that skill file**
+3. **Follow the skill's workflow and checklist**
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+> If step 1 warns the index is stale, run `npx gitnexus analyze` in the terminal first.
 
-## Never Do
-
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
-
-## Resources
-
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/Proma/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/Proma/clusters` | All functional areas |
-| `gitnexus://repo/Proma/processes` | All execution flows |
-| `gitnexus://repo/Proma/process/{name}` | Step-by-step execution trace |
-
-## CLI
+## Skills
 
 | Task | Read this skill file |
 |------|---------------------|
@@ -550,6 +577,29 @@ This project is indexed by GitNexus as **Proma** (15903 symbols, 26552 relations
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+---
+
+## Post-Commit: Update CLAUDE.md
+
+每次提交后，检查 diff 并更新对应的 CLAUDE.md 文件以反映变更。
+
+**映射关系**：
+- `packages/shared/**` → `packages/shared/` 目录相关文档
+- `packages/core/**` → `packages/core/` 目录相关文档
+- `packages/ui/**` → `packages/ui/` 目录相关文档
+- `apps/electron/src/main/**` → 根 `CLAUDE.md` 主进程服务层 + IPC 相关章节
+- `apps/electron/src/renderer/**` → 根 `CLAUDE.md` 渲染进程相关章节
+- `apps/electron/src/preload/**` → 根 `CLAUDE.md` Preload 相关章节
+- Root-level 配置文件 → 根 `CLAUDE.md`
+
+**更新内容**：
+- 新增/删除/重命名的文件或导出
+- 新增的组件、hooks、类型或 IPC 通道
+- 架构或数据流变更
+- 新增依赖或配置变更
+
+**不要重写整个文件** — 只更新相关章节。如果无实质变更（typo 修复、样式微调），跳过更新。
 
 ---
 

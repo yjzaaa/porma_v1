@@ -127,7 +127,7 @@ export function registerRuntimeHandlers(): void {
         console.warn('[IPC] preview:open-detached 收到无效参数')
         return null
       }
-      const { openDetachedPreviewWindow } = await import('../lib/detached-preview-window')
+      const { openDetachedPreviewWindow } = await import('../lib/window/detached-preview-window')
       const sourceWindow = BrowserWindow.fromWebContents(event.sender)
       return openDetachedPreviewWindow(input, sourceWindow)
     }
@@ -138,7 +138,7 @@ export function registerRuntimeHandlers(): void {
     IPC_CHANNELS.GET_DETACHED_PREVIEW_DATA,
     async (_, previewId: string) => {
       if (!previewId || typeof previewId !== 'string') return null
-      const { getDetachedPreviewWindowData } = await import('../lib/detached-preview-window')
+      const { getDetachedPreviewWindowData } = await import('../lib/window/detached-preview-window')
       return getDetachedPreviewWindowData(previewId)
     }
   )
@@ -147,7 +147,7 @@ export function registerRuntimeHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.SCREENSHOT_CAPTURE,
     async (_, input: { html: string; isDark: boolean; width?: number; mode: 'clipboard' | 'file'; css?: string; themeClass?: string }) => {
-      const { captureScreenshot } = await import('../lib/screenshot-service')
+      const { captureScreenshot } = await import('../lib/system/screenshot-service')
       return captureScreenshot(input)
     }
   )

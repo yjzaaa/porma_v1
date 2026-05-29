@@ -9,9 +9,9 @@ import type {
   FeishuUpdateBindingInput,
   AgentSessionMeta,
 } from '@proma/shared'
-import { getFeishuBotBindingsPath, getFeishuBotMetadataPath } from '../../config-paths'
+import { getFeishuBotBindingsPath, getFeishuBotMetadataPath } from '../../storage/config-paths'
 import { getAgentSessionMeta } from '../../agent/agent-session-manager'
-import { getSettings } from '../../settings-service'
+import { getSettings } from '../../storage/settings-service'
 
 export interface Metadata {
   lastInteractedUserOpenId?: string

@@ -19,7 +19,7 @@ import type {
 } from '@proma/shared'
 import { FEISHU_IPC_CHANNELS } from '@proma/shared'
 import { agentEventBus, runAgentHeadless } from '../agent/agent-service'
-import { getSettings } from '../settings-service'
+import { getSettings } from '../storage/settings-service'
 
 // 子模块
 import { FeishuConnection } from './connection/FeishuConnection'

@@ -26,8 +26,8 @@ import {
   readAttachmentAsBase64,
   deleteAttachment,
   openFileDialog,
-} from '../lib/attachment-service'
-import { extractTextFromAttachment } from '../lib/document-parser'
+} from '../lib/file/attachment-service'
+import { extractTextFromAttachment } from '../lib/file/document-parser'
 import { getTutorialContent, createWelcomeConversation } from '../lib/tutorial-service'
 import { getBundledResourcesDir } from './helpers'
 

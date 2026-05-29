@@ -21,7 +21,7 @@ import { getDecryptedBotClientSecret } from './dingtalk-config'
 import { BridgeCommandHandler, type BridgeAttachment } from '../bridge/bridge-command-handler'
 import { inferImageMediaType, saveImageToSession, inferExtension, MAX_IMAGE_SIZE } from '../bridge/bridge-attachment-utils'
 import { getAgentWorkspace } from '../agent/agent-workspace-manager'
-import { getSettings } from '../settings-service'
+import { getSettings } from '../storage/settings-service'
 
 // ===== 类型声明 =====
 

@@ -9,7 +9,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { safeStorage } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { getChannelsPath } from '../config-paths'
+import { getChannelsPath } from '../storage/config-paths'
 import type {
   Channel,
   ChannelCreateInput,
@@ -22,8 +22,8 @@ import type {
   ProviderType,
 } from '@proma/shared'
 import { PROVIDER_DEFAULT_URLS } from '@proma/shared'
-import { getFetchFn } from '../proxy-fetch'
-import { getEffectiveProxyUrl } from '../proxy-settings-service'
+import { getFetchFn } from '../network/proxy-fetch'
+import { getEffectiveProxyUrl } from '../network/proxy-settings-service'
 import { normalizeAnthropicBaseUrl, normalizeBaseUrl, normalizeVersionedAnthropicBaseUrl } from '@proma/core'
 
 /** 当前配置版本 */

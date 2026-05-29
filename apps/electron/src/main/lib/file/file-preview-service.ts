@@ -563,7 +563,7 @@ export async function preparePdfPreview(filePath: string, basePaths?: string[]):
   let standardFontDataUrl: string
   let registerFilePath: (path: string) => string
   try {
-    const { registerPromaDirectoryPath, registerPromaFilePath } = await import('./local-file-protocol')
+    const { registerPromaDirectoryPath, registerPromaFilePath } = await import('../system/local-file-protocol')
     registerFilePath = registerPromaFilePath
     fileUrl = registerPromaFilePath(safePath)
     pdfScriptUrl = registerPromaFilePath(require.resolve(`${PDFJS_PACKAGE}/build/pdf.min.mjs`))

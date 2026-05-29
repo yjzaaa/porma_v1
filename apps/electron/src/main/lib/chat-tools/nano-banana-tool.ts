@@ -10,7 +10,7 @@ import type { ToolCall, ToolResult, ToolDefinition } from '@proma/core'
 import type { ChatToolMeta, FileAttachment } from '@proma/shared'
 import { randomUUID } from 'node:crypto'
 import { getToolCredentials } from '../chat/chat-tool-config'
-import { saveAttachment, readAttachmentAsBase64, isImageAttachment } from '../attachment-service'
+import { saveAttachment, readAttachmentAsBase64, isImageAttachment } from '../file/attachment-service'
 
 // ===== Gemini API 类型（REST API 使用 camelCase） =====
 

@@ -10,9 +10,9 @@
  */
 
 import type { PromaPermissionMode, AgentDefinition } from '@proma/shared'
-import { getUserProfile } from '../user-profile-service'
+import { getUserProfile } from '../storage/user-profile-service'
 import { getWorkspaceMcpConfig, getWorkspaceSkills } from './agent-workspace-manager'
-import { getConfigDirName } from '../config-paths'
+import { getConfigDirName } from '../storage/config-paths'
 
 // ===== 内置 SubAgent 定义 =====
 

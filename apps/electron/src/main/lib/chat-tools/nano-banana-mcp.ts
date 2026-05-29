@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { extname, resolve, isAbsolute, join } from 'node:path'
 import { getToolState, getToolCredentials } from '../chat/chat-tool-config'
-import { saveAttachment, isImageAttachment } from '../attachment-service'
+import { saveAttachment, isImageAttachment } from '../file/attachment-service'
 
 // ===== Gemini API 类型（REST API 使用 camelCase） =====
 

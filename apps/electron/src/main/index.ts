@@ -57,8 +57,8 @@ function registerProtocolsAndHandlers(): void {
 
 
 
-import { getSettings, updateSettings } from './lib/settings-service'
-import { handlePromaFileRequest } from './lib/local-file-protocol'
+import { getSettings, updateSettings } from './lib/storage/settings-service'
+import { handlePromaFileRequest } from './lib/system/local-file-protocol'
 
 // 处理 EPIPE 错误：当 stdout/stderr 管道被关闭时（如 electronmon 重启），忽略写入错误
 // 这在开发环境热重载时经常发生，不影响应用功能
@@ -84,14 +84,14 @@ import { createApplicationMenu } from './menu'
 import { registerIpcHandlers } from './ipc'
 import { createTray, destroyTray } from './tray'
 import { initializeRuntime } from './lib/runtime/runtime-init'
-import { seedDefaultSkills } from './lib/config-paths'
+import { seedDefaultSkills } from './lib/storage/config-paths'
 import { upgradeDefaultSkillsInWorkspaces } from './lib/agent/agent-workspace-manager'
 import { stopAllAgents, killOrphanedClaudeSubprocesses } from './lib/agent/agent-service'
 import { stopAllGenerations } from './lib/chat/chat-service'
 import { initAutoUpdater, cleanupUpdater } from './lib/updater/auto-updater'
-import { startWorkspaceWatcher, stopWorkspaceWatcher } from './lib/workspace-watcher'
+import { startWorkspaceWatcher, stopWorkspaceWatcher } from './lib/file/workspace-watcher'
 import { startChatToolsWatcher, stopChatToolsWatcher } from './lib/chat/chat-tools-watcher'
-import { getIsQuitting, setQuitting } from './lib/app-lifecycle'
+import { getIsQuitting, setQuitting } from './lib/system/app-lifecycle'
 import { registerBridge, startAllBridges, stopAllBridges } from './lib/bridge/bridge-registry'
 import { feishuBridgeManager } from './lib/feishu/feishu-bridge-manager'
 import { getFeishuMultiBotConfig } from './lib/feishu/feishu-config'
@@ -100,14 +100,14 @@ import { dingtalkBridgeManager } from './lib/dingtalk/dingtalk-bridge-manager'
 import { getDingTalkMultiBotConfig } from './lib/dingtalk/dingtalk-config'
 import { wechatBridge } from './lib/wechat/wechat-bridge'
 import { getWeChatConfig } from './lib/wechat/wechat-config'
-import { createQuickTaskWindow, toggleQuickTaskWindow, destroyQuickTaskWindow } from './lib/quick-task-window'
+import { createQuickTaskWindow, toggleQuickTaskWindow, destroyQuickTaskWindow } from './lib/window/quick-task-window'
 import {
   createVoiceDictationWindow,
   toggleVoiceDictationWindow,
   destroyVoiceDictationWindow,
   shouldSuppressVoiceDictationActivate,
-} from './lib/voice-dictation-window'
-import { registerGlobalShortcut, unregisterAllGlobalShortcuts } from './lib/global-shortcut-service'
+} from './lib/window/voice-dictation-window'
+import { registerGlobalShortcut, unregisterAllGlobalShortcuts } from './lib/system/global-shortcut-service'
 import { TRAY_IPC_CHANNELS } from '../types'
 
 const MIGRATION_IPC_OPEN = 'migration:open-import-file'

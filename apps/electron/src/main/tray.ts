@@ -4,7 +4,7 @@ import { existsSync } from 'fs'
 import { listAgentSessions } from './lib/agent/agent-session-manager'
 import { listAgentWorkspaces } from './lib/agent/agent-workspace-manager'
 import { isAgentSessionActive } from './lib/agent/agent-service'
-import { createTrayMenuModel, type TrayRecentSessionItem } from './lib/tray-menu-model'
+import { createTrayMenuModel, type TrayRecentSessionItem } from './lib/system/tray-menu-model'
 
 let tray: Tray | null = null
 

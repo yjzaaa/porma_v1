@@ -13,8 +13,8 @@ import type {
   VoiceDictationSettings,
   VoiceDictationTranscriptEvent,
   VoiceDictationStateEvent,
-} from '../../types'
-import { VOICE_DICTATION_IPC_CHANNELS } from '../../types'
+} from '../../../types'
+import { VOICE_DICTATION_IPC_CHANNELS } from '../../../types'
 
 const PROTOCOL_VERSION = 0b0001
 const HEADER_SIZE = 0b0001

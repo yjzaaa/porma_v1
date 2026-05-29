@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import type { ProxyConfig } from '@proma/shared'
-import { getProxySettingsPath } from './config-paths'
+import { getProxySettingsPath } from '../storage/config-paths'
 import { detectSystemProxy } from './system-proxy-detector'
 
 /**

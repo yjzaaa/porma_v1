@@ -18,7 +18,7 @@ import type {
 } from '@proma/shared'
 import { WECHAT_IPC_CHANNELS, WECHAT_ITEM_TYPE, WECHAT_MESSAGE_TYPE, WECHAT_MESSAGE_STATE } from '@proma/shared'
 import { getDecryptedCredentials, saveWeChatCredentials, clearWeChatCredentials, getWeChatConfig, updateWeChatDefaultWorkspace } from './wechat-config'
-import { getWeChatSyncPath } from '../config-paths'
+import { getWeChatSyncPath } from '../storage/config-paths'
 import { BridgeCommandHandler, type BridgeAttachment } from '../bridge/bridge-command-handler'
 import { inferImageMediaType, saveImageToSession, saveFileToSession, inferExtension, MAX_IMAGE_SIZE } from '../bridge/bridge-attachment-utils'
 import { getAgentWorkspace } from '../agent/agent-workspace-manager'

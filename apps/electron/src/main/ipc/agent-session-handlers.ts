@@ -34,7 +34,7 @@ import { runAgent, stopAgent, generateAgentTitle, isAgentSessionActive, rewindAg
 import { permissionService } from '../lib/agent/agent-permission-service'
 import { askUserService } from '../lib/agent/agent-ask-user-service'
 import { exitPlanService } from '../lib/agent/agent-exit-plan-service'
-import { watchAttachedDirectory } from '../lib/workspace-watcher'
+import { watchAttachedDirectory } from '../lib/file/workspace-watcher'
 import { feishuBridgeManager } from '../lib/feishu/feishu-bridge-manager'
 import { isPromaPermissionMode } from '@proma/shared'
 import type { PromaPermissionMode } from '@proma/shared'

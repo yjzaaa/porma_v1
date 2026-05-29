@@ -8,7 +8,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { safeStorage } from 'electron'
-import { getWeChatConfigPath } from '../config-paths'
+import { getWeChatConfigPath } from '../storage/config-paths'
 import type { WeChatConfig, WeChatCredentials } from '@proma/shared'
 
 /** 默认配置 */

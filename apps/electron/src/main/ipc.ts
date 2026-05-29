@@ -8,8 +8,8 @@
 import { registerUpdaterIpc } from './lib/updater/updater-ipc'
 import { autoArchiveConversations } from './lib/conversation/conversation-manager'
 import { autoArchiveAgentSessions } from './lib/agent/agent-session-manager'
-import { getSettings } from './lib/settings-service'
-import { cleanupTempFiles, cleanupStorage } from './lib/storage-service'
+import { getSettings } from './lib/storage/settings-service'
+import { cleanupTempFiles, cleanupStorage } from './lib/storage/storage-service'
 
 import { registerRuntimeHandlers } from './ipc/runtime-handlers'
 import { registerChannelHandlers } from './ipc/channel-handlers'

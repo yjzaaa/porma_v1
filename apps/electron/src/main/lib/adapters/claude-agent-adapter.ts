@@ -25,7 +25,7 @@ import {
   isThinkingSignatureError as matchesThinkingSignatureError,
 } from '@proma/shared'
 import type { CanUseToolOptions, PermissionResult } from '../agent/agent-permission-service'
-import { TRANSIENT_NETWORK_PATTERN } from '../error-patterns'
+import { TRANSIENT_NETWORK_PATTERN } from '../agent/error-patterns'
 import { spawn as spawnChild, execFileSync } from 'node:child_process'
 
 /** SDK Query 对象类型（从动态导入中推断） */

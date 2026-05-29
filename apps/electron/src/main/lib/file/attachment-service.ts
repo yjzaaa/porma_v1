@@ -18,7 +18,7 @@ import {
   getConfigDir,
   getConversationAttachmentsDir,
   resolveAttachmentPath,
-} from './config-paths'
+} from '../storage/config-paths'
 import type {
   FileAttachment,
   AttachmentSaveInput,

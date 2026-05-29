@@ -11,7 +11,7 @@ import { watch, existsSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
 import { BrowserWindow } from 'electron'
 import { CHAT_TOOL_IPC_CHANNELS } from '@proma/shared'
-import { getChatToolsConfigPath } from '../config-paths'
+import { getChatToolsConfigPath } from '../storage/config-paths'
 
 /** debounce 延迟（ms） */
 const DEBOUNCE_MS = 500

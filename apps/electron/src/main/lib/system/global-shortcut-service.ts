@@ -10,7 +10,7 @@
  */
 
 import { app, globalShortcut } from 'electron'
-import { getSettings } from './settings-service'
+import { getSettings } from '../storage/settings-service'
 
 /** 全局快捷键 ID → 回调映射 */
 const globalCallbacks = new Map<string, () => void>()

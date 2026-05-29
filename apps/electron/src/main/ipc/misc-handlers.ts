@@ -29,7 +29,7 @@ import type {
   GitHubRelease,
   GitHubReleaseListOptions,
 } from '@proma/shared'
-import type { CleanupOptions } from '../lib/storage-service'
+import type { CleanupOptions } from '../lib/storage/storage-service'
 import {
   getSystemPromptConfig,
   createSystemPrompt,
@@ -37,13 +37,13 @@ import {
   deleteSystemPrompt,
   updateAppendSetting,
   setDefaultPrompt,
-} from '../lib/system-prompt-manager'
+} from '../lib/agent/system-prompt-manager'
 import {
   getLatestRelease,
   listReleases as listGitHubReleases,
   getReleaseByTag,
-} from '../lib/github-release-service'
-import { calculateStorageStats, cleanupStorage, cleanupTempFiles } from '../lib/storage-service'
+} from '../lib/integration/github-release-service'
+import { calculateStorageStats, cleanupStorage, cleanupTempFiles } from '../lib/storage/storage-service'
 
 export function registerMiscHandlers(): void {
   // ===== 系统提示词管理 =====
@@ -139,7 +139,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     QUICK_TASK_IPC_CHANNELS.SUBMIT,
     async (_, input: QuickTaskSubmitInput): Promise<void> => {
-      const { hideQuickTaskWindow } = await import('../lib/quick-task-window')
+      const { hideQuickTaskWindow } = await import('../lib/window/quick-task-window')
       const { getMainWindow } = await import('../index')
       hideQuickTaskWindow()
 
@@ -159,7 +159,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     QUICK_TASK_IPC_CHANNELS.HIDE,
     async (): Promise<void> => {
-      const { hideQuickTaskWindow } = await import('../lib/quick-task-window')
+      const { hideQuickTaskWindow } = await import('../lib/window/quick-task-window')
       hideQuickTaskWindow()
     }
   )
@@ -167,7 +167,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     QUICK_TASK_IPC_CHANNELS.REREGISTER_GLOBAL_SHORTCUTS,
     async (): Promise<Record<string, boolean>> => {
-      const { reregisterAllGlobalShortcuts } = await import('../lib/global-shortcut-service')
+      const { reregisterAllGlobalShortcuts } = await import('../lib/system/global-shortcut-service')
       return reregisterAllGlobalShortcuts()
     }
   )
@@ -177,7 +177,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.GET_SETTINGS,
     async (): Promise<VoiceDictationSettings> => {
-      const { getVoiceDictationSettings } = await import('../lib/voice-dictation-settings-service')
+      const { getVoiceDictationSettings } = await import('../lib/integration/voice-dictation-settings-service')
       return getVoiceDictationSettings()
     }
   )
@@ -185,7 +185,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.UPDATE_SETTINGS,
     async (_, updates: VoiceDictationSettingsUpdate): Promise<VoiceDictationSettings> => {
-      const { updateVoiceDictationSettings } = await import('../lib/voice-dictation-settings-service')
+      const { updateVoiceDictationSettings } = await import('../lib/integration/voice-dictation-settings-service')
       return updateVoiceDictationSettings(updates)
     }
   )
@@ -193,8 +193,8 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.TEST_CONNECTION,
     async (_, updates?: VoiceDictationSettingsUpdate): Promise<VoiceDictationTestResult> => {
-      const { getVoiceDictationSettings } = await import('../lib/voice-dictation-settings-service')
-      const { testDoubaoAsrConnection } = await import('../lib/doubao-asr-service')
+      const { getVoiceDictationSettings } = await import('../lib/integration/voice-dictation-settings-service')
+      const { testDoubaoAsrConnection } = await import('../lib/integration/doubao-asr-service')
       const settings = { ...getVoiceDictationSettings(), ...(updates ?? {}) }
       return testDoubaoAsrConnection(settings)
     }
@@ -203,7 +203,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.TOGGLE,
     async (event): Promise<void> => {
-      const { toggleVoiceDictationWindow } = await import('../lib/voice-dictation-window')
+      const { toggleVoiceDictationWindow } = await import('../lib/window/voice-dictation-window')
       const sourceWindow = BrowserWindow.fromWebContents(event.sender)
       toggleVoiceDictationWindow({ targetIsProma: !!sourceWindow })
     }
@@ -212,8 +212,8 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.START,
     async (event, input: VoiceDictationStartInput): Promise<void> => {
-      const { getVoiceDictationSettings } = await import('../lib/voice-dictation-settings-service')
-      const { startDoubaoAsrSession } = await import('../lib/doubao-asr-service')
+      const { getVoiceDictationSettings } = await import('../lib/integration/voice-dictation-settings-service')
+      const { startDoubaoAsrSession } = await import('../lib/integration/doubao-asr-service')
       const win = BrowserWindow.fromWebContents(event.sender)
       if (!win) throw new Error('语音输入窗口不存在')
       await startDoubaoAsrSession(input.sessionId, getVoiceDictationSettings(), win)
@@ -223,7 +223,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.SEND_AUDIO,
     async (_, input: VoiceDictationAudioChunkInput): Promise<void> => {
-      const { sendDoubaoAsrAudio } = await import('../lib/doubao-asr-service')
+      const { sendDoubaoAsrAudio } = await import('../lib/integration/doubao-asr-service')
       sendDoubaoAsrAudio(input.sessionId, input.data)
     }
   )
@@ -231,7 +231,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.STOP,
     async (_, input: VoiceDictationStopInput): Promise<void> => {
-      const { stopDoubaoAsrSession } = await import('../lib/doubao-asr-service')
+      const { stopDoubaoAsrSession } = await import('../lib/integration/doubao-asr-service')
       await stopDoubaoAsrSession(input.sessionId)
     }
   )
@@ -239,7 +239,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.CANCEL,
     async (_, input: VoiceDictationStopInput): Promise<void> => {
-      const { cancelDoubaoAsrSession } = await import('../lib/doubao-asr-service')
+      const { cancelDoubaoAsrSession } = await import('../lib/integration/doubao-asr-service')
       cancelDoubaoAsrSession(input.sessionId)
     }
   )
@@ -247,8 +247,8 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.COMMIT,
     async (_, input: VoiceDictationCommitInput): Promise<VoiceDictationCommitResult> => {
-      const { getVoiceDictationSettings } = await import('../lib/voice-dictation-settings-service')
-      const { commitVoiceDictationText } = await import('../lib/text-output-service')
+      const { getVoiceDictationSettings } = await import('../lib/integration/voice-dictation-settings-service')
+      const { commitVoiceDictationText } = await import('../lib/text/text-output-service')
       return commitVoiceDictationText(input.text, getVoiceDictationSettings())
     }
   )
@@ -256,7 +256,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.HIDE,
     async (): Promise<void> => {
-      const { hideVoiceDictationWindow } = await import('../lib/voice-dictation-window')
+      const { hideVoiceDictationWindow } = await import('../lib/window/voice-dictation-window')
       hideVoiceDictationWindow()
     }
   )
@@ -264,7 +264,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.RESIZE,
     async (_, input: VoiceDictationResizeInput): Promise<void> => {
-      const { resizeVoiceDictationWindow } = await import('../lib/voice-dictation-window')
+      const { resizeVoiceDictationWindow } = await import('../lib/window/voice-dictation-window')
       resizeVoiceDictationWindow(input.height)
     }
   )
@@ -272,7 +272,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.CHECK_MIC_PERMISSION,
     async (): Promise<MicPermissionResult> => {
-      const { checkMicrophonePermission } = await import('../lib/microphone-permission-service')
+      const { checkMicrophonePermission } = await import('../lib/system/microphone-permission-service')
       return checkMicrophonePermission()
     }
   )
@@ -280,7 +280,7 @@ export function registerMiscHandlers(): void {
   ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.REQUEST_MIC_PERMISSION,
     async (): Promise<MicPermissionResult> => {
-      const { requestMicrophonePermission } = await import('../lib/microphone-permission-service')
+      const { requestMicrophonePermission } = await import('../lib/system/microphone-permission-service')
       return requestMicrophonePermission()
     }
   )
@@ -288,32 +288,32 @@ export function registerMiscHandlers(): void {
   // ===== 数据迁移 =====
 
   ipcMain.handle('migration:getExportPreview', async (_, workspaceId: string) => {
-    const { getExportPreview } = await import('../lib/migration-service')
+    const { getExportPreview } = await import('../lib/storage/migration-service')
     return getExportPreview(workspaceId)
   })
 
   ipcMain.handle('migration:getShareExportPreview', async () => {
-    const { getShareExportPreview } = await import('../lib/migration-service')
+    const { getShareExportPreview } = await import('../lib/storage/migration-service')
     return getShareExportPreview()
   })
 
   ipcMain.handle('migration:export', async (_, options) => {
-    const { exportData } = await import('../lib/migration-service')
+    const { exportData } = await import('../lib/storage/migration-service')
     return exportData(options)
   })
 
   ipcMain.handle('migration:exportV2', async (_, options) => {
-    const { exportDataV2 } = await import('../lib/migration-service')
+    const { exportDataV2 } = await import('../lib/storage/migration-service')
     return exportDataV2(options)
   })
 
   ipcMain.handle('migration:parseImportFile', async (_, filePath: string) => {
-    const { parseImportFile } = await import('../lib/migration-service')
+    const { parseImportFile } = await import('../lib/storage/migration-service')
     return parseImportFile(filePath)
   })
 
   ipcMain.handle('migration:confirmImport', async (_, options) => {
-    const { confirmImport } = await import('../lib/migration-service')
+    const { confirmImport } = await import('../lib/storage/migration-service')
     return confirmImport(options)
   })
 

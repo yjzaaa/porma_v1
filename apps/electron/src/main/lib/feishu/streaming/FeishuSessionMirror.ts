@@ -4,7 +4,7 @@
 import type { AgentSessionMeta, FeishuChatBinding } from '@proma/shared'
 import { BrowserWindow } from 'electron'
 import { AGENT_IPC_CHANNELS } from '@proma/shared'
-import { getSettings } from '../../settings-service'
+import { getSettings } from '../../storage/settings-service'
 import { buildSessionMirrorGroupName } from '../session-mirror'
 import { getAgentSessionMeta } from '../../agent/agent-session-manager'
 

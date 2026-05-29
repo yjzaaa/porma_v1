@@ -32,8 +32,8 @@ import {
   getUserProfilePath,
   getChatToolsConfigPath,
 } from './config-paths'
-import { listAgentWorkspaces, getAgentWorkspace, getAllWorkspaceSkills, getWorkspaceMcpConfig } from './agent/agent-workspace-manager'
-import { listChannels, decryptApiKey } from './channel/channel-manager'
+import { listAgentWorkspaces, getAgentWorkspace, getAllWorkspaceSkills, getWorkspaceMcpConfig } from '../agent/agent-workspace-manager'
+import { listChannels, decryptApiKey } from '../channel/channel-manager'
 import type { AgentWorkspace } from '@proma/shared'
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
@@ -795,7 +795,7 @@ export async function confirmImport(options: ConfirmImportOptions | ConfirmImpor
     const overwrite = conflictResolution === 'overwrite'
     let targetWorkspace: AgentWorkspace | undefined
     if (createNewWorkspace) {
-      const { createAgentWorkspace } = await import('./agent/agent-workspace-manager')
+      const { createAgentWorkspace } = await import('../agent/agent-workspace-manager')
       targetWorkspace = createAgentWorkspace(newWorkspaceName ?? (manifest as MigrationManifest).workspaceName)
     } else if (targetWorkspaceId) {
       targetWorkspace = getAgentWorkspace(targetWorkspaceId)
@@ -841,7 +841,7 @@ async function _confirmImportV2(options: ConfirmImportOptionsV2): Promise<{ succ
   const v2Manifest = manifest as MigrationManifestV2
   const overwrite = conflictResolution === 'overwrite'
 
-  const { createAgentWorkspace } = await import('./agent/agent-workspace-manager')
+  const { createAgentWorkspace } = await import('../agent/agent-workspace-manager')
 
   const localWorkspaces = listAgentWorkspaces()
   const localBySlug = new Map(localWorkspaces.map((w) => [w.slug, w]))

@@ -6,7 +6,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { getMemoryConfigPath } from './config-paths'
+import { getMemoryConfigPath } from '../storage/config-paths'
 import type { MemoryConfig } from '@proma/shared'
 
 /** 默认记忆配置 */

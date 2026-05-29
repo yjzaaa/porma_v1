@@ -17,8 +17,8 @@ import {
   getWorkspaceCapabilities,
 } from '../agent/agent-workspace-manager'
 import { runAgentHeadless, agentEventBus, stopAgent, isAgentSessionActive } from '../agent/agent-service'
-import { getSettings } from '../settings-service'
-import { getAgentWorkspacePath } from '../config-paths'
+import { getSettings } from '../storage/settings-service'
+import { getAgentWorkspacePath } from '../storage/config-paths'
 import { buildAttachedFilesBlock } from './bridge-attachment-utils'
 import { readdirSync } from 'node:fs'
 

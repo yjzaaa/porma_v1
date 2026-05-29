@@ -14,8 +14,8 @@ import {
   getConversationsIndexPath,
   getConversationsDir,
   getConversationMessagesPath,
-} from '../config-paths'
-import { deleteConversationAttachments, deleteAttachment } from '../attachment-service'
+} from '../storage/config-paths'
+import { deleteConversationAttachments, deleteAttachment } from '../file/attachment-service'
 import type { ConversationMeta, ChatMessage, RecentMessagesResult, MessageSearchResult } from '@proma/shared'
 
 /**

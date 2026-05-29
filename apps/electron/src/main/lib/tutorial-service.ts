@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { createConversation, appendMessage } from './conversation/conversation-manager'
-import { getConversationAttachmentsDir } from './config-paths'
+import { getConversationAttachmentsDir } from './storage/config-paths'
 import type { ConversationMeta, FileAttachment, ChatMessage } from '@proma/shared'
 
 /**
