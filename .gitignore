@@ -44,3 +44,21 @@ vendor
 
 # git worktrees (managed by proma-worktree skill)
 .worktrees
+.gitnexus
+
+# Claude Code internal state
+.claude/
+
+# AutoClaw orchestrator comms
+.autoclaw/
+
+# Plans directory (managed by CCteam)
+.plans/
+
+# Additional docs generated during development
+docs/arch/
+docs/superpowers/
+gitnexus-homepage
+
+# Cursor IDE rules (local only)
+.cursor/rules/

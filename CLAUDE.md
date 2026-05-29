@@ -506,3 +506,160 @@ React UI 更新
 - **文件监听**：工作区文件、MCP 配置、Chat 工具实时监控
 - **事件流处理**：SDK 消息流式转换与累积
 - **错误映射**：SDK 错误统一转换为应用错误
+
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **Proma** (15903 symbols, 26552 relationships, 294 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+
+## Resources
+
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/Proma/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/Proma/clusters` | All functional areas |
+| `gitnexus://repo/Proma/processes` | All execution flows |
+| `gitnexus://repo/Proma/process/{name}` | Step-by-step execution trace |
+
+## CLI
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+<!-- gitnexus:end -->
+
+---
+
+# proma-refactor — 团队运营手册
+
+> 由 CCteam-creator 自动生成。此文件让 team-lead 的团队知识在上下文压缩后仍然保持。
+
+## Team-Lead 控制平面
+
+- team-lead = 主对话，不是生成的 agent
+- team-lead 负责用户对齐、范围控制、任务分解和阶段推进
+- team-lead 维护项目全局真相：主 `.plans/proma-refactor/task_plan.md`、`decisions.md` 和此 `CLAUDE.md`
+- **禁用独立子智能体**：团队存在后，所有工作通过 SendMessage 交给队友。不要启动独立的 Agent/子智能体（Explore、general-purpose 等）。唯一例外：用 `team_name` 参数生成新队友
+
+## 团队花名册
+
+| 名称 | 角色 | 模型 | 核心能力 |
+|------|------|------|---------|
+| frontend-dev | 前端开发 | sonnet | React + Jotai + TypeScript 渲染进程拆分 |
+| backend-dev | 后端开发 | sonnet | Electron 主进程 + Node.js 服务拆分 |
+| researcher | 探索/研究 | sonnet | 代码搜索 + Spec 审查（只读） |
+| reviewer | 代码审查 | sonnet | 安全/质量/性能审查 + 功能等价性验证 |
+
+## 任务下发协议
+
+大任务 4 要素：范围+验收标准、文档提醒（创建任务文件夹+索引）、依赖说明（文件路径+行号）、审查预期。
+
+各角色任务文件夹前缀：
+- frontend-dev / backend-dev：`task-<名称>/`
+- researcher：`research-<主题>/`
+- reviewer：`review-<目标>/`
+
+## 通信速查
+
+| 操作 | 命令 |
+|------|------|
+| 给单个智能体分配任务 | `SendMessage(to: "<名称>", message: "...")` |
+| dev 请求代码审查 | dev 直接联系 reviewer（不经过 team-lead） |
+
+## 状态检查
+
+| 要检查什么 | 怎么做 |
+|-----------|--------|
+| 全局概览 | `TaskList` |
+| 快速扫描 | 并行读取各 agent 的 `progress.md` |
+| 深入了解 | 读 agent 的 `findings.md`（索引）→ 再看具体任务文件夹 |
+| 方向检查 | 读 `.plans/proma-refactor/task_plan.md` |
+| 恢复项目 | 读 `team-snapshot.md` → 从缓存 prompt 启动智能体 → 读各 agent 的 `findings.md` 索引 → 重建 TaskCreate |
+
+读取顺序：**progress**（到哪了）→ **findings**（遇到什么）→ **task_plan**（目标是什么）
+
+## 文档索引
+
+> 导航地图：`.plans/proma-refactor/docs/index.md`
+
+| 文档 | 位置 |
+|------|------|
+| 重构设计 Spec | docs/superpowers/specs/2026-05-29-large-file-refactor-design.md |
+| 架构 | .plans/proma-refactor/docs/architecture.md |
+| 不变量 | .plans/proma-refactor/docs/invariants.md |
+
+## 审查维度
+
+| # | 维度 | 权重 | STRONG | WEAK |
+|---|------|------|--------|------|
+| RD-1 | 功能等价性 | 高 | 所有 BDD 场景通过，零回归，IPC 通道行为不变 | 任何现有功能断裂 |
+| RD-2 | 接口稳定性 | 中 | 公共导出签名不变，调用方无需修改 | 公共签名变更导致级联修改 |
+| RD-3 | 代码可读性 | 中 | 拆分后文件 <400 行，职责单一，接口直观 | 新文件仍 >800 行或边界模糊 |
+
+## 核心协议
+
+| 协议 | 触发时机 | 操作 |
+|------|---------|------|
+| **GitNexus 影响分析（强制）** | 编辑任何函数/类/方法前 | 运行 `gitnexus_impact({target, direction: "upstream"})`，报告爆炸半径和风险等级 |
+| **GitNexus 变更检测（强制）** | 提交前 | 运行 `gitnexus_detect_changes()` 验证只影响了预期符号和执行流 |
+| **GitNexus 代码探索** | 理解不熟悉的代码时 | 优先使用 `gitnexus_query` 和 `gitnexus_context`，而非 grep |
+| 3-Strike 上报 | 智能体报告 3 次失败 | 读其 progress.md，给新方向或重新分配 |
+| 代码审查 | 每轮完成后 | dev 在 findings.md 写改动摘要，发给 reviewer |
+| 阶段推进 | 每轮验证通过 | 读 findings 确认无回归，推进下一轮 |
+| 上下文溢出 | 智能体报告上下文过长 | 进度已存文件，恢复或生成后继者 |
+| Known Pitfalls | 3-Strike 解决后 | 追加到下方 Known Pitfalls |
+
+## Known Pitfalls
+
+> 当识别到反复出现的失败模式时追加。
+
+（初始为空）
+
+## 风格决策
+
+| # | 决策 | 来源 | 状态 |
+|---|------|------|------|
+| SD-1 | 注释和日志优先采用中文 | CLAUDE.md | Manual |
+| SD-2 | 状态管理用 Jotai | CLAUDE.md | Manual |
+| SD-3 | UI 组件用 ShadcnUI + Radix | CLAUDE.md | Manual |
+| SD-4 | 保持简单直接不设计的风格 | CLAUDE.md | Manual |
+| SD-5 | BDD 行为驱动开发 | CLAUDE.md | Manual |
+
+## 文件结构
+
+```
+.plans/proma-refactor/
+  task_plan.md          -- 主计划
+  team-snapshot.md      -- 缓存的入职 prompts
+  findings.md           -- 团队级发现
+  progress.md           -- 工作日志
+  decisions.md          -- 架构决策记录
+  docs/                 -- 知识库
+  frontend-dev/         -- 前端开发目录
+  backend-dev/          -- 后端开发目录
+  researcher/           -- 探索/研究目录
+  reviewer/             -- 代码审查目录
+```
