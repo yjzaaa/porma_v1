@@ -10,10 +10,10 @@ import { existsSync } from 'node:fs'
 import { app } from 'electron'
 import { homedir } from 'node:os'
 import type { TypedError, AgentSessionMeta, SDKMessage } from '@proma/shared'
-import { isTransientNetworkError } from './error-patterns'
+import { isTransientNetworkError } from '../error-patterns'
 import { getAgentSessionMeta, getAgentSessionSDKMessages } from './agent-session-manager'
 import { getAgentWorkspace, getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles } from './agent-workspace-manager'
-import { getConfigDirName, getWorkspaceFilesDir } from './config-paths'
+import { getConfigDirName, getWorkspaceFilesDir } from '../config-paths'
 
 // ===== API 错误提取 =====
 

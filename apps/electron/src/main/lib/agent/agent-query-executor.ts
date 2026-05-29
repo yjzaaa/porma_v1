@@ -12,7 +12,7 @@ import type {
   TypedError,
   RetryAttempt,
 } from '@proma/shared'
-import type { ClaudeAgentQueryOptions } from './adapters/claude-agent-adapter'
+import type { ClaudeAgentQueryOptions } from '../adapters/claude-agent-adapter'
 import {
   isPromptTooLongError,
   isThinkingSignatureError,
@@ -20,7 +20,7 @@ import {
   mapSDKErrorToTypedError,
   extractErrorDetails,
   shouldKeepChannelOpen,
-} from './adapters/claude-agent-adapter'
+} from '../adapters/claude-agent-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages, appendSDKMessages } from './agent-session-manager'
 import {

@@ -20,10 +20,10 @@ import {
   saveDingTalkBotConfig,
   removeDingTalkBot,
   getDecryptedBotClientSecret,
-} from '../lib/dingtalk-config'
-import { dingtalkBridgeManager } from '../lib/dingtalk-bridge-manager'
-import { getWeChatConfig } from '../lib/wechat-config'
-import { wechatBridge } from '../lib/wechat-bridge'
+} from '../lib/dingtalk/dingtalk-config'
+import { dingtalkBridgeManager } from '../lib/dingtalk/dingtalk-bridge-manager'
+import { getWeChatConfig } from '../lib/wechat/wechat-config'
+import { wechatBridge } from '../lib/wechat/wechat-bridge'
 
 export function registerIntegrationHandlers(): void {
   // ===== 钉钉集成（旧 API，向后兼容）=====

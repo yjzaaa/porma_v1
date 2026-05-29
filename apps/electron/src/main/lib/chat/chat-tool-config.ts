@@ -7,7 +7,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { getChatToolsConfigPath } from './config-paths'
+import { getChatToolsConfigPath } from '../config-paths'
 import type { ChatToolsFileConfig, ChatToolState, ChatToolMeta } from '@proma/shared'
 
 /** 默认配置 */

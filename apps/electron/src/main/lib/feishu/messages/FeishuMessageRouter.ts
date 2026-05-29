@@ -4,14 +4,14 @@
  * 负责消息解析、分类（命令 vs 普通消息）、附件下载、去重检测。
  */
 import type { FeishuMessageContext, FeishuMention, AgentSendInput } from '@proma/shared'
-import { buildErrorCard } from '../../feishu-message'
+import { buildErrorCard } from '../feishu-message'
 import { resolveGroupMessageAccess } from '../group-message-policy'
 import {
   saveImageToSession,
   saveFileToSession,
   inferExtension,
-} from '../../bridge-attachment-utils'
-import { getAgentWorkspace } from '../../agent-workspace-manager'
+} from '../../bridge/bridge-attachment-utils'
+import { getAgentWorkspace } from '../../agent/agent-workspace-manager'
 import type { FeishuImageAttachment, FeishuFileAttachment } from '../types'
 import type { FeishuGroupService } from '../group/FeishuGroupService'
 import type { FeishuBindingRepository } from '../bindings/FeishuBindingRepository'

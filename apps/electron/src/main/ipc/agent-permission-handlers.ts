@@ -19,14 +19,14 @@ import type {
   ChatToolState,
   ChatToolMeta,
 } from '@proma/shared'
-import { isAgentSessionActive, updateAgentPermissionMode } from '../lib/agent-service'
-import { getAgentSessionMeta, updateAgentSessionMeta } from '../lib/agent-session-manager'
-import { permissionService } from '../lib/agent-permission-service'
-import { askUserService } from '../lib/agent-ask-user-service'
-import { exitPlanService } from '../lib/agent-exit-plan-service'
+import { isAgentSessionActive, updateAgentPermissionMode } from '../lib/agent/agent-service'
+import { getAgentSessionMeta, updateAgentSessionMeta } from '../lib/agent/agent-session-manager'
+import { permissionService } from '../lib/agent/agent-permission-service'
+import { askUserService } from '../lib/agent/agent-ask-user-service'
+import { exitPlanService } from '../lib/agent/agent-exit-plan-service'
 import { getMemoryConfig, setMemoryConfig } from '../lib/memory-service'
-import { getAllToolInfos } from '../lib/chat-tool-registry'
-import { updateToolState, updateToolCredentials, getToolCredentials, addCustomTool, deleteCustomTool } from '../lib/chat-tool-config'
+import { getAllToolInfos } from '../lib/chat/chat-tool-registry'
+import { updateToolState, updateToolCredentials, getToolCredentials, addCustomTool, deleteCustomTool } from '../lib/chat/chat-tool-config'
 
 export function registerAgentPermissionHandlers(): void {
   // ===== Agent 后台任务管理 =====
@@ -218,7 +218,7 @@ export function registerAgentPermissionHandlers(): void {
         }
       }
       if (toolId === 'web-search') {
-        const { getToolCredentials: getCredentials } = await import('../lib/chat-tool-config')
+        const { getToolCredentials: getCredentials } = await import('../lib/chat/chat-tool-config')
         const credentials = getCredentials('web-search')
         if (!credentials.apiKey) {
           return { success: false, message: '请先填写 Tavily API Key' }
@@ -245,7 +245,7 @@ export function registerAgentPermissionHandlers(): void {
         }
       }
       if (toolId === 'nano-banana') {
-        const { getToolCredentials: getCredentials } = await import('../lib/chat-tool-config')
+        const { getToolCredentials: getCredentials } = await import('../lib/chat/chat-tool-config')
         const credentials = getCredentials('nano-banana')
         if (!credentials.apiKey) {
           return { success: false, message: '请先填写 Gemini API Key' }

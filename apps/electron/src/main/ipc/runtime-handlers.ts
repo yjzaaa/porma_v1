@@ -7,8 +7,8 @@
 import { ipcMain, shell, BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '@proma/shared'
 import type { RuntimeStatus, GitRepoStatus, GetFileDiffInput, DetachedPreviewWindowInput, RevertFileInput, FileAccessOptions } from '@proma/shared'
-import { getRuntimeStatus, getGitRepoStatus, reinitializeRuntime } from '../lib/runtime-init'
-import { getUnstagedChanges, getFileDiff, getUntrackedContent, revertFile, getDiffContents } from '../lib/git-diff-service'
+import { getRuntimeStatus, getGitRepoStatus, reinitializeRuntime } from '../lib/runtime/runtime-init'
+import { getUnstagedChanges, getFileDiff, getUntrackedContent, revertFile, getDiffContents } from '../lib/git/git-diff-service'
 import { isPathAllowed, ensurePathAllowed, normalizeFileAccessOptions, KNOWN_EDITORS } from './helpers'
 
 export function registerRuntimeHandlers(): void {

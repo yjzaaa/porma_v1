@@ -19,8 +19,8 @@ import {
   updateContextDividers,
   autoArchiveConversations,
   searchConversationMessages,
-} from '../lib/conversation-manager'
-import { sendMessage, stopGeneration, generateTitle } from '../lib/chat-service'
+} from '../lib/conversation/conversation-manager'
+import { sendMessage, stopGeneration, generateTitle } from '../lib/chat/chat-service'
 import {
   saveAttachment,
   readAttachmentAsBase64,

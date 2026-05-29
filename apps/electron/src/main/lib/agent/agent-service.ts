@@ -27,10 +27,10 @@ import type {
   PromaPermissionMode,
   AgentExternalRunSource,
 } from '@proma/shared'
-import { ClaudeAgentAdapter, scanAndKillOrphanedClaudeSubprocesses } from './adapters/claude-agent-adapter'
+import { ClaudeAgentAdapter, scanAndKillOrphanedClaudeSubprocesses } from '../adapters/claude-agent-adapter'
 import { AgentEventBus } from './agent-event-bus'
 import { AgentOrchestrator } from './agent-orchestrator'
-import { getAgentSessionWorkspacePath, getWorkspaceFilesDir } from './config-paths'
+import { getAgentSessionWorkspacePath, getWorkspaceFilesDir } from '../config-paths'
 import { getAgentSessionMeta } from './agent-session-manager'
 
 // ===== 实例创建 =====

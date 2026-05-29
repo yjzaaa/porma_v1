@@ -7,7 +7,7 @@
 import { ipcMain } from 'electron'
 import { CHANNEL_IPC_CHANNELS } from '@proma/shared'
 import type { Channel, ChannelCreateInput, ChannelUpdateInput, ChannelTestResult, FetchModelsInput, FetchModelsResult } from '@proma/shared'
-import { listChannels, createChannel, updateChannel, deleteChannel, decryptApiKey, testChannel, testChannelDirect, fetchModels } from '../lib/channel-manager'
+import { listChannels, createChannel, updateChannel, deleteChannel, decryptApiKey, testChannel, testChannelDirect, fetchModels } from '../lib/channel/channel-manager'
 
 export function registerChannelHandlers(): void {
   // 获取所有渠道（apiKey 保持加密态）

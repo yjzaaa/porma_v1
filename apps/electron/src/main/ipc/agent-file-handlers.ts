@@ -20,8 +20,8 @@ import type {
   FileAccessOptions,
   ResolvedFileUrl,
 } from '@proma/shared'
-import { getAgentSessionMeta, updateAgentSessionMeta } from '../lib/agent-session-manager'
-import { saveFilesToAgentSession, saveFilesToWorkspaceFiles } from '../lib/agent-service'
+import { getAgentSessionMeta, updateAgentSessionMeta } from '../lib/agent/agent-session-manager'
+import { saveFilesToAgentSession, saveFilesToWorkspaceFiles } from '../lib/agent/agent-service'
 import { getAgentSessionWorkspacePath, getAgentWorkspacesDir, getWorkspaceFilesDir } from '../lib/config-paths'
 import {
   getAgentWorkspace,
@@ -31,7 +31,7 @@ import {
   attachWorkspaceFile,
   detachWorkspaceDirectory,
   detachWorkspaceFile,
-} from '../lib/agent-workspace-manager'
+} from '../lib/agent/agent-workspace-manager'
 import { watchAttachedDirectory, unwatchAttachedDirectory } from '../lib/workspace-watcher'
 import { normalizeFileAccessOptions, isPathAllowed, getAllowedCandidateBasePaths, HIDDEN_FS_ENTRIES } from './helpers'
 import { registerPromaFilePath } from '../lib/local-file-protocol'

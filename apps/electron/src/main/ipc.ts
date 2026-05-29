@@ -6,8 +6,8 @@
  */
 
 import { registerUpdaterIpc } from './lib/updater/updater-ipc'
-import { autoArchiveConversations } from './lib/conversation-manager'
-import { autoArchiveAgentSessions } from './lib/agent-session-manager'
+import { autoArchiveConversations } from './lib/conversation/conversation-manager'
+import { autoArchiveAgentSessions } from './lib/agent/agent-session-manager'
 import { getSettings } from './lib/settings-service'
 import { cleanupTempFiles, cleanupStorage } from './lib/storage-service'
 

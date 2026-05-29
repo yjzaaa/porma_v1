@@ -8,7 +8,7 @@ import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
-import { createConversation, appendMessage } from './conversation-manager'
+import { createConversation, appendMessage } from './conversation/conversation-manager'
 import { getConversationAttachmentsDir } from './config-paths'
 import type { ConversationMeta, FileAttachment, ChatMessage } from '@proma/shared'
 

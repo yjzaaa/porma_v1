@@ -18,10 +18,10 @@ import type {
 } from '@proma/shared'
 import { DINGTALK_IPC_CHANNELS } from '@proma/shared'
 import { getDecryptedBotClientSecret } from './dingtalk-config'
-import { BridgeCommandHandler, type BridgeAttachment } from './bridge-command-handler'
-import { inferImageMediaType, saveImageToSession, inferExtension, MAX_IMAGE_SIZE } from './bridge-attachment-utils'
-import { getAgentWorkspace } from './agent-workspace-manager'
-import { getSettings } from './settings-service'
+import { BridgeCommandHandler, type BridgeAttachment } from '../bridge/bridge-command-handler'
+import { inferImageMediaType, saveImageToSession, inferExtension, MAX_IMAGE_SIZE } from '../bridge/bridge-attachment-utils'
+import { getAgentWorkspace } from '../agent/agent-workspace-manager'
+import { getSettings } from '../settings-service'
 
 // ===== 类型声明 =====
 

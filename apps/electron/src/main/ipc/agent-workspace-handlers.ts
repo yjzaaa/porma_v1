@@ -37,11 +37,11 @@ import {
   createSkillEntry,
   deleteSkillEntry,
   renameSkillEntry,
-} from '../lib/agent-workspace-manager'
+} from '../lib/agent/agent-workspace-manager'
 import { getWorkspaceSkillsDir } from '../lib/config-paths'
-import { runAgent, stopAgent, queueAgentMessage } from '../lib/agent-service'
-import { getAgentSessionMeta } from '../lib/agent-session-manager'
-import { feishuBridgeManager } from '../lib/feishu-bridge-manager'
+import { runAgent, stopAgent, queueAgentMessage } from '../lib/agent/agent-service'
+import { getAgentSessionMeta } from '../lib/agent/agent-session-manager'
+import { feishuBridgeManager } from '../lib/feishu/feishu-bridge-manager'
 
 export function registerAgentWorkspaceHandlers(): void {
   // ===== 工作区管理 =====

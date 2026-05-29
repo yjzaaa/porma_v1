@@ -7,7 +7,7 @@
 
 import type { ToolCall, ToolResult } from '@proma/core'
 import type { ChatToolMeta, ChatToolHttpConfig } from '@proma/shared'
-import { getChatToolsConfig } from '../chat-tool-config'
+import { getChatToolsConfig } from '../chat/chat-tool-config'
 
 /** HTTP 请求超时（30 秒） */
 const HTTP_TIMEOUT_MS = 30_000

@@ -14,7 +14,7 @@ import { getUserProfile, updateUserProfile } from '../lib/user-profile-service'
 import { getSettings, updateSettings } from '../lib/settings-service'
 import { setDockBadgeCount } from '../lib/dock-badge-service'
 import { getScratchPadPath } from '../lib/config-paths'
-import { syncFeishuSyncSleepBlocker } from '../lib/feishu-sleep-blocker'
+import { syncFeishuSyncSleepBlocker } from '../lib/feishu/feishu-sleep-blocker'
 import { resolveAppIconPath } from './helpers'
 
 export function registerSettingsHandlers(): void {

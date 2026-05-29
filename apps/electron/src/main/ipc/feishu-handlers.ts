@@ -26,9 +26,9 @@ import {
   saveFeishuBotConfig,
   removeFeishuBot,
   getDecryptedBotAppSecret,
-} from '../lib/feishu-config'
-import { feishuBridgeManager } from '../lib/feishu-bridge-manager'
-import { presenceService } from '../lib/feishu-presence'
+} from '../lib/feishu/feishu-config'
+import { feishuBridgeManager } from '../lib/feishu/feishu-bridge-manager'
+import { presenceService } from '../lib/feishu/feishu-presence'
 
 export function registerFeishuHandlers(): void {
   // ===== 飞书集成（旧 API，向后兼容）=====

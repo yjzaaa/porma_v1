@@ -1,7 +1,7 @@
 /**
  * feishu-bridge 内部类型定义
  */
-import type { ToolSummary } from '../feishu-message'
+import type { ToolSummary } from './feishu-message'
 import type {
   FeishuMessageContext,
 } from '@proma/shared'

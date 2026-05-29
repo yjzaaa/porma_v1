@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { safeStorage } from 'electron'
-import { getFeishuConfigPath } from './config-paths'
+import { getFeishuConfigPath } from '../config-paths'
 import type {
   FeishuConfig,
   FeishuConfigInput,

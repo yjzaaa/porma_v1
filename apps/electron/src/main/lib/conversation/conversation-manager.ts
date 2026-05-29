@@ -8,14 +8,14 @@
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync, unlinkSync, createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
-import { writeJsonFileAtomic, readJsonFileSafe } from './safe-file'
+import { writeJsonFileAtomic, readJsonFileSafe } from '../safe-file'
 import { randomUUID } from 'node:crypto'
 import {
   getConversationsIndexPath,
   getConversationsDir,
   getConversationMessagesPath,
-} from './config-paths'
-import { deleteConversationAttachments, deleteAttachment } from './attachment-service'
+} from '../config-paths'
+import { deleteConversationAttachments, deleteAttachment } from '../attachment-service'
 import type { ConversationMeta, ChatMessage, RecentMessagesResult, MessageSearchResult } from '@proma/shared'
 
 /**

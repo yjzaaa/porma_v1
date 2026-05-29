@@ -10,7 +10,7 @@ import type {
   AgentSessionMeta,
 } from '@proma/shared'
 import { getFeishuBotBindingsPath, getFeishuBotMetadataPath } from '../../config-paths'
-import { getAgentSessionMeta } from '../../agent-session-manager'
+import { getAgentSessionMeta } from '../../agent/agent-session-manager'
 import { getSettings } from '../../settings-service'
 
 export interface Metadata {

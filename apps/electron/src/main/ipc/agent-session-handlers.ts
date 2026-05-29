@@ -29,13 +29,13 @@ import {
   autoArchiveAgentSessions,
   searchAgentSessionMessages,
   searchAgentSessionReferences,
-} from '../lib/agent-session-manager'
-import { runAgent, stopAgent, generateAgentTitle, isAgentSessionActive, rewindAgentSession, updateAgentPermissionMode } from '../lib/agent-service'
-import { permissionService } from '../lib/agent-permission-service'
-import { askUserService } from '../lib/agent-ask-user-service'
-import { exitPlanService } from '../lib/agent-exit-plan-service'
+} from '../lib/agent/agent-session-manager'
+import { runAgent, stopAgent, generateAgentTitle, isAgentSessionActive, rewindAgentSession, updateAgentPermissionMode } from '../lib/agent/agent-service'
+import { permissionService } from '../lib/agent/agent-permission-service'
+import { askUserService } from '../lib/agent/agent-ask-user-service'
+import { exitPlanService } from '../lib/agent/agent-exit-plan-service'
 import { watchAttachedDirectory } from '../lib/workspace-watcher'
-import { feishuBridgeManager } from '../lib/feishu-bridge-manager'
+import { feishuBridgeManager } from '../lib/feishu/feishu-bridge-manager'
 import { isPromaPermissionMode } from '@proma/shared'
 import type { PromaPermissionMode } from '@proma/shared'
 

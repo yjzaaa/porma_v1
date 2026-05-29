@@ -2,7 +2,7 @@
  * 飞书消息附件下载
  */
 import type { FeishuImageAttachment, FeishuFileAttachment } from '../types'
-import { inferImageMediaType } from '../../bridge-attachment-utils'
+import { inferImageMediaType } from '../../bridge/bridge-attachment-utils'
 
 export class FeishuAttachmentDownload {
   constructor(

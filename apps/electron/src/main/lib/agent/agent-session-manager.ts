@@ -10,7 +10,7 @@
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync, rmSync, renameSync, readdirSync, cpSync, copyFileSync, createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
-import { writeJsonFileAtomic, readJsonFileSafe } from './safe-file'
+import { writeJsonFileAtomic, readJsonFileSafe } from '../safe-file'
 import { randomUUID } from 'node:crypto'
 import { join, resolve, dirname } from 'node:path'
 import {
@@ -20,7 +20,7 @@ import {
   getAgentSessionWorkspacePath,
   getAgentWorkspacePath,
   getSdkConfigDir,
-} from './config-paths'
+} from '../config-paths'
 import { getAgentWorkspace } from './agent-workspace-manager'
 
 // 在模块加载时一次性设置 SDK 配置目录，避免在 forkSession 等异步调用中临时修改/恢复
@@ -37,8 +37,8 @@ import type {
   AgentSessionReferenceSearchInput,
   AgentSessionReferenceSearchResult,
 } from '@proma/shared'
-import { getConversationMessages } from './conversation-manager'
-import { clearNanoBananaAgentHistory } from './chat-tools/nano-banana-mcp'
+import { getConversationMessages } from '../conversation/conversation-manager'
+import { clearNanoBananaAgentHistory } from '../chat-tools/nano-banana-mcp'
 
 /**
  * 会话索引文件格式

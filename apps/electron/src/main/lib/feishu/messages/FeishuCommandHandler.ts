@@ -9,21 +9,21 @@ import {
   createAgentSession,
   listAgentSessions,
   getAgentSessionMeta,
-} from '../../agent-session-manager'
+} from '../../agent/agent-session-manager'
 import {
   listAgentWorkspacesByUpdatedAt,
   getAgentWorkspace,
   getWorkspaceCapabilities,
-} from '../../agent-workspace-manager'
-import { stopAgent } from '../../agent-service'
+} from '../../agent/agent-workspace-manager'
+import { stopAgent } from '../../agent/agent-service'
 import {
   buildHelpCard,
   buildSessionListCard,
   buildWorkspaceSwitchedCard,
   buildWorkspaceListCard,
   buildErrorCard,
-} from '../../feishu-message'
-import type { WorkspaceListItem } from '../../feishu-message'
+} from '../feishu-message'
+import type { WorkspaceListItem } from '../feishu-message'
 import { readdirSync } from 'node:fs'
 
 export interface BindingOperations {

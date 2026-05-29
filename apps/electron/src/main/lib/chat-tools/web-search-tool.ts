@@ -7,7 +7,7 @@
 
 import type { ToolCall, ToolResult, ToolDefinition } from '@proma/core'
 import type { ChatToolMeta } from '@proma/shared'
-import { getToolCredentials } from '../chat-tool-config'
+import { getToolCredentials } from '../chat/chat-tool-config'
 
 // ===== 工具元数据 =====
 

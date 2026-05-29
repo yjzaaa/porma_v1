@@ -1,8 +1,8 @@
 /**
  * 上下文前缀/副标题解析
  */
-import { getAgentWorkspace } from '../agent-workspace-manager'
-import { getAgentSessionMeta } from '../agent-session-manager'
+import { getAgentWorkspace } from '../agent/agent-workspace-manager'
+import { getAgentSessionMeta } from '../agent/agent-session-manager'
 
 /**
  * 解析消息上下文前缀：[工作区名称]->[会话名称]：

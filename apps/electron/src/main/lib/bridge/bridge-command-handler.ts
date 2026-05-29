@@ -10,15 +10,15 @@
 import { BrowserWindow } from 'electron'
 import type { AgentStreamPayload } from '@proma/shared'
 import { AGENT_IPC_CHANNELS } from '@proma/shared'
-import { createAgentSession, listAgentSessions, getAgentSessionMeta } from './agent-session-manager'
+import { createAgentSession, listAgentSessions, getAgentSessionMeta } from '../agent/agent-session-manager'
 import {
   listAgentWorkspacesByUpdatedAt,
   getAgentWorkspace,
   getWorkspaceCapabilities,
-} from './agent-workspace-manager'
-import { runAgentHeadless, agentEventBus, stopAgent, isAgentSessionActive } from './agent-service'
-import { getSettings } from './settings-service'
-import { getAgentWorkspacePath } from './config-paths'
+} from '../agent/agent-workspace-manager'
+import { runAgentHeadless, agentEventBus, stopAgent, isAgentSessionActive } from '../agent/agent-service'
+import { getSettings } from '../settings-service'
+import { getAgentWorkspacePath } from '../config-paths'
 import { buildAttachedFilesBlock } from './bridge-attachment-utils'
 import { readdirSync } from 'node:fs'
 

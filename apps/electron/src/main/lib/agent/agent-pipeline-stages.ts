@@ -15,24 +15,24 @@ import type {
 } from '@proma/shared'
 import { PROMA_DEFAULT_PERMISSION_MODE, PROMA_PERMISSION_MODE_CONFIG, SAFE_TOOLS } from '@proma/shared'
 import type { PromaPermissionMode, PermissionRequest, AskUserRequest } from '@proma/shared'
-import type { ClaudeAgentQueryOptions } from './adapters/claude-agent-adapter'
+import type { ClaudeAgentQueryOptions } from '../adapters/claude-agent-adapter'
 import { normalizeAnthropicBaseUrlForSdk } from '@proma/core'
-import { getEffectiveProxyUrl } from './proxy-settings-service'
+import { getEffectiveProxyUrl } from '../proxy-settings-service'
 import { appendSDKMessages, updateAgentSessionMeta, getAgentSessionMeta, getAgentSessionMessages } from './agent-session-manager'
 import { getAgentWorkspace, getWorkspaceMcpConfig, ensurePluginManifest } from './agent-workspace-manager'
-import { getAgentWorkspacePath, getAgentSessionWorkspacePath, getSdkConfigDir } from './config-paths'
-import { getRuntimeStatus } from './runtime-init'
-import { getSettings } from './settings-service'
+import { getAgentWorkspacePath, getAgentSessionWorkspacePath, getSdkConfigDir } from '../config-paths'
+import { getRuntimeStatus } from '../runtime/runtime-init'
+import { getSettings } from '../settings-service'
 import { buildSystemPrompt, buildDynamicContext, buildBuiltinAgents } from './agent-prompt-builder'
-import { getMemoryConfig } from './memory-service'
-import { searchMemory, addMemory, formatSearchResult } from './memos-client'
+import { getMemoryConfig } from '../memory-service'
+import { searchMemory, addMemory, formatSearchResult } from '../memos-client'
 import {
   resolveSDKCliPath, buildContextPrompt, buildReferencedSessionsPrompt, collectAttachedDirectories, supports1MContext, DEFAULT_SESSION_TITLE, DEFAULT_MODEL_ID,
 } from './agent-orchestrator-utils'
 import { AgentEventBus } from './agent-event-bus'
 import { executeQuery } from './agent-query-executor'
 import type { SessionCallbacks } from './agent-orchestrator'
-import { getChannelById, decryptApiKey, listChannels } from './channel-manager'
+import { getChannelById, decryptApiKey, listChannels } from '../channel/channel-manager'
 
 // ===== PipelineContext =====
 

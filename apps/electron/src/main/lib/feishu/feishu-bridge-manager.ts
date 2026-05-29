@@ -16,8 +16,8 @@ import type {
 } from '@proma/shared'
 import { FeishuBridge } from './feishu-bridge'
 import { getFeishuMultiBotConfig, getFeishuBotById } from './feishu-config'
-import { getSettings } from './settings-service'
-import { resolveSessionMirrorBot } from './feishu/session-mirror'
+import { getSettings } from '../settings-service'
+import { resolveSessionMirrorBot } from './session-mirror'
 
 class FeishuBridgeManager {
   /** botId → Bridge 实例 */

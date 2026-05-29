@@ -15,22 +15,22 @@ import {
   MEMORY_TOOL_META,
   MEMORY_TOOL_DEFINITIONS,
   isMemoryAvailable,
-} from './chat-tools/memory-tool'
+} from '../chat-tools/memory-tool'
 import {
   WEB_SEARCH_TOOL_META,
   WEB_SEARCH_TOOL_DEFINITIONS,
   isWebSearchAvailable,
-} from './chat-tools/web-search-tool'
+} from '../chat-tools/web-search-tool'
 import {
   AGENT_RECOMMEND_TOOL_META,
   AGENT_RECOMMEND_TOOL_DEFINITIONS,
   isAgentRecommendAvailable,
-} from './chat-tools/agent-recommend-tool'
+} from '../chat-tools/agent-recommend-tool'
 import {
   NANO_BANANA_TOOL_META,
   NANO_BANANA_TOOL_DEFINITIONS,
   isNanoBananaAvailable,
-} from './chat-tools/nano-banana-tool'
+} from '../chat-tools/nano-banana-tool'
 
 // ===== 内置工具注册 =====
 

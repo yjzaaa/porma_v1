@@ -11,9 +11,9 @@ import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import type { FileAccessOptions } from '@proma/shared'
 import { getAgentWorkspacesDir, getWorkspaceFilesDir } from '../lib/config-paths'
-import { getAgentSessionMeta } from '../lib/agent-session-manager'
-import { getAgentWorkspace } from '../lib/agent-workspace-manager'
-import { getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles } from '../lib/agent-workspace-manager'
+import { getAgentSessionMeta } from '../lib/agent/agent-session-manager'
+import { getAgentWorkspace } from '../lib/agent/agent-workspace-manager'
+import { getWorkspaceAttachedDirectories, getWorkspaceAttachedFiles } from '../lib/agent/agent-workspace-manager'
 
 /** 文件浏览器中需要隐藏的系统文件 */
 export const HIDDEN_FS_ENTRIES = new Set(['.DS_Store', 'Thumbs.db'])

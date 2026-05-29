@@ -6,7 +6,7 @@ import { BrowserWindow } from 'electron'
 import { AGENT_IPC_CHANNELS } from '@proma/shared'
 import { getSettings } from '../../settings-service'
 import { buildSessionMirrorGroupName } from '../session-mirror'
-import { getAgentSessionMeta } from '../../agent-session-manager'
+import { getAgentSessionMeta } from '../../agent/agent-session-manager'
 
 export interface BindingProvider {
   findBySessionId(sessionId: string): FeishuChatBinding | undefined

@@ -4,7 +4,7 @@
  * 封装 LarkChannel 的创建、连接、断开和消息接收。
  */
 import type { FeishuBotConfig, FeishuBridgeState } from '@proma/shared'
-import { getDecryptedBotAppSecret } from '../../feishu-config'
+import { getDecryptedBotAppSecret } from '../feishu-config'
 
 export interface FeishuMessageHandler {
   (data: Record<string, unknown>): void
