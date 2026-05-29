@@ -1,5 +1,5 @@
 import { powerSaveBlocker } from 'electron'
-import type { AppSettings } from '../../types'
+import type { AppSettings } from '../../../types'
 import { FeishuSyncSleepBlocker } from './sleep-blocker'
 import type { SleepBlockerAdapter, SleepBlockerType } from './sleep-blocker'
 

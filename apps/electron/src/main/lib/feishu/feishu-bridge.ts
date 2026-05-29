@@ -54,8 +54,8 @@ interface SessionBuffer {
 interface QueuedFeishuMessage {
   msgCtx: import('@proma/shared').FeishuMessageContext
   text: string
-  imageAttachments: import('./feishu/types').FeishuImageAttachment[]
-  fileAttachments: import('./feishu/types').FeishuFileAttachment[]
+  imageAttachments: import('./types').FeishuImageAttachment[]
+  fileAttachments: import('./types').FeishuFileAttachment[]
   parentMessageId?: string
 }
 
@@ -442,8 +442,8 @@ class FeishuBridge {
   private async handleUserMessage(
     msgCtx: import('@proma/shared').FeishuMessageContext,
     text: string,
-    imageAttachments: import('./feishu/types').FeishuImageAttachment[] = [],
-    fileAttachments: import('./feishu/types').FeishuFileAttachment[] = [],
+    imageAttachments: import('./types').FeishuImageAttachment[] = [],
+    fileAttachments: import('./types').FeishuFileAttachment[] = [],
     parentMessageId?: string,
   ): Promise<void> {
     const { chatId } = msgCtx

@@ -739,7 +739,7 @@ async function injectNanoBananaTools(
   agentCwd?: string,
 ): Promise<void> {
   try {
-    const { injectNanoBananaMcpServer } = await import('./chat-tools/nano-banana-mcp')
+    const { injectNanoBananaMcpServer } = await import('../chat-tools/nano-banana-mcp')
     await injectNanoBananaMcpServer(sdk, mcpServers, sessionId, agentCwd)
   } catch (err) {
     console.error(`[Agent 编排] 注入 Nano Banana MCP 失败:`, err)

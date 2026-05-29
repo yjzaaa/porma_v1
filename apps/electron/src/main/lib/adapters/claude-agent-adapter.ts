@@ -24,7 +24,7 @@ import {
   THINKING_SIGNATURE_ERROR_TITLE,
   isThinkingSignatureError as matchesThinkingSignatureError,
 } from '@proma/shared'
-import type { CanUseToolOptions, PermissionResult } from '../agent-permission-service'
+import type { CanUseToolOptions, PermissionResult } from '../agent/agent-permission-service'
 import { TRANSIENT_NETWORK_PATTERN } from '../error-patterns'
 import { spawn as spawnChild, execFileSync } from 'node:child_process'
 
