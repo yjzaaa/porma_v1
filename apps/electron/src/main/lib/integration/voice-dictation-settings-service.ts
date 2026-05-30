@@ -47,8 +47,9 @@ export function getVoiceDictationSettings(): VoiceDictationSettings {
   return {
     ...DEFAULT_VOICE_DICTATION_SETTINGS,
     ...raw,
-    appId: raw.appId ?? raw.appKey ?? '',
-    accessToken: decryptSecret(encryptedAccessToken),
+    appId: (raw.appId ?? raw.appKey ?? '').trim(),
+    accessToken: decryptSecret(encryptedAccessToken).trim(),
+    resourceId: (raw.resourceId ?? '').trim(),
     customHotwords: typeof raw.customHotwords === 'string' ? raw.customHotwords : '',
   }
 }
@@ -61,6 +62,9 @@ export function updateVoiceDictationSettings(
   const next: VoiceDictationSettings = {
     ...current,
     ...updates,
+    appId: (updates.appId ?? current.appId ?? '').trim(),
+    accessToken: (updates.accessToken ?? current.accessToken ?? '').trim(),
+    resourceId: (updates.resourceId ?? current.resourceId ?? '').trim(),
     provider: 'doubao',
   }
 

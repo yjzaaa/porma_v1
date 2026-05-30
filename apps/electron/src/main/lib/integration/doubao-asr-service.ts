@@ -137,6 +137,19 @@ function buildFrame(
   return Buffer.concat([header, size, payload])
 }
 
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n\t]/g, '').trim()
+}
+
+function buildHeaders(settings: VoiceDictationSettings): Record<string, string> {
+  return {
+    'X-Api-App-Key': sanitizeHeaderValue(settings.appId),
+    'X-Api-Access-Key': sanitizeHeaderValue(settings.accessToken),
+    'X-Api-Resource-Id': sanitizeHeaderValue(settings.resourceId),
+    'X-Api-Connect-Id': randomUUID(),
+  }
+}
+
 function buildClientRequest(settings: VoiceDictationSettings): Buffer {
   const audio: Record<string, unknown> = {
     format: 'pcm',
@@ -307,12 +320,7 @@ export async function testDoubaoAsrConnection(
 
   return await new Promise((resolve) => {
     const ws = new WebSocket(getEndpoint(settings), {
-      headers: {
-        'X-Api-App-Key': settings.appId,
-        'X-Api-Access-Key': settings.accessToken,
-        'X-Api-Resource-Id': settings.resourceId,
-        'X-Api-Connect-Id': randomUUID(),
-      },
+      headers: buildHeaders(settings),
     })
 
     const timer = setTimeout(() => {
@@ -347,12 +355,7 @@ export async function startDoubaoAsrSession(
 
   await new Promise<void>((resolve, reject) => {
     const ws = new WebSocket(getEndpoint(settings), {
-      headers: {
-        'X-Api-App-Key': settings.appId,
-        'X-Api-Access-Key': settings.accessToken,
-        'X-Api-Resource-Id': settings.resourceId,
-        'X-Api-Connect-Id': randomUUID(),
-      },
+      headers: buildHeaders(settings),
     })
 
     const active: ActiveSession = { sessionId, ws, win, closed: false }

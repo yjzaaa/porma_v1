@@ -30,7 +30,7 @@ import {
   resolveSDKCliPath, buildContextPrompt, buildReferencedSessionsPrompt, collectAttachedDirectories, supports1MContext, DEFAULT_SESSION_TITLE, DEFAULT_MODEL_ID,
 } from './agent-orchestrator-utils'
 import { AgentEventBus } from './agent-event-bus'
-import { executeQuery } from './agent-query-executor'
+import { executeQuery, type ExecutorState } from './agent-query-executor'
 import type { SessionCallbacks } from './agent-orchestrator'
 import { getChannelById, decryptApiKey, listChannels } from '../channel/channel-manager'
 
@@ -63,6 +63,8 @@ export interface PipelineContext {
   finalPrompt: string
   contextualMessage: string
   queryOptions: ClaudeAgentQueryOptions | undefined
+  /** 共享状态 → executorState，onSessionId 回调写入，重试逻辑读取 */
+  executorState: ExecutorState
   lastQueryCapturedSdkSession: string | undefined
   mcpServers: Record<string, Record<string, unknown>>
   runGeneration: number
@@ -104,6 +106,7 @@ export function createPipelineContext(
     finalPrompt: '',
     contextualMessage: '',
     queryOptions: undefined,
+    executorState: { capturedSdkSessionId: undefined },
     lastQueryCapturedSdkSession: undefined,
     mcpServers: {},
     runGeneration,
@@ -592,6 +595,7 @@ export async function stageExecuteQuery(ctx: PipelineContext): Promise<void> {
       ctx.sessionPermissionModes.delete(ctx.sessionId)
     },
     isStoppedByUser: () => ctx.stoppedBySessions.has(ctx.sessionId),
+    executorState: ctx.executorState,
   })
 }
 

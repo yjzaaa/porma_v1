@@ -51,6 +51,8 @@ export interface QueryExecutorDeps {
   getActiveSession: () => number | undefined
   deactivateRun: () => void
   isStoppedByUser: () => boolean
+  /** 共享状态容器 — orchestrator 的 onSessionId 回调写入，executor 的重试逻辑读取 */
+  executorState: ExecutorState
 }
 
 export interface ExecutorState {
@@ -61,7 +63,7 @@ export interface ExecutorState {
  * 执行一次 Agent query，包含自动重试和事件流处理
  */
 export async function executeQuery(deps: QueryExecutorDeps): Promise<void> {
-  const { adapter, eventBus, sessionId, contextualMessage, agentCwd, modelId, channelId, userMessage, streamStartedAt, callbacks, queryOptions, getActiveSession, deactivateRun, isStoppedByUser } = deps
+  const { adapter, eventBus, sessionId, contextualMessage, agentCwd, modelId, channelId, userMessage, streamStartedAt, callbacks, queryOptions, getActiveSession, deactivateRun, isStoppedByUser, executorState } = deps
   const stderrChunks: string[] = []
 
   let existingSdkSessionId = deps.existingSdkSessionId
@@ -74,7 +76,7 @@ export async function executeQuery(deps: QueryExecutorDeps): Promise<void> {
   let invisibleRecoveryAttempts = 0
   const accumulatedMessages: SDKMessage[] = []
   let capturedResultSubtype: string | undefined
-  let capturedSdkSessionId = existingSdkSessionId
+  // capturedSdkSessionId 通过 executorState 共享，由 orchestrator 的 onSessionId 写入
 
   const canAutoRetry = (attempt: number): boolean =>
     attempt <= MAX_AUTO_RETRIES && retryDelayElapsedMs < MAX_AUTO_RETRY_WAIT_MS
@@ -82,7 +84,7 @@ export async function executeQuery(deps: QueryExecutorDeps): Promise<void> {
   const canTryThinkingSignatureRecovery = (attempt: number): boolean =>
     !thinkingSignatureRecoveryAttempted &&
     canAutoRetry(attempt) &&
-    !!(existingSdkSessionId || capturedSdkSessionId || queryOptions.resumeSessionId)
+    !!(existingSdkSessionId || executorState.capturedSdkSessionId || queryOptions.resumeSessionId)
 
   const queryStartedAt = Date.now()
 
@@ -179,20 +181,20 @@ export async function executeQuery(deps: QueryExecutorDeps): Promise<void> {
 
             if (isSessionNotFoundError(detailedMessage, originalError) && existingSdkSessionId && canAutoRetry(attempt)) {
               existingSdkSessionId = undefined
-              capturedSdkSessionId = undefined
+              executorState.capturedSdkSessionId = undefined
               lastRetryableError = prepareSessionNotFoundRecovery(sessionId, queryOptions, contextualMessage, agentCwd, accumulatedMessages, queryStartedAt)
               shouldRetryFromError = true
               break
             }
 
             if (
-              typedError.code === 'thinking_signature_error' &&
+              typedError.code === 'thinking_signature_invalid' &&
               canTryThinkingSignatureRecovery(attempt)
             ) {
               thinkingSignatureRecoveryAttempted = true
               invisibleRecoveryAttempts += 1
               existingSdkSessionId = undefined
-              capturedSdkSessionId = undefined
+              executorState.capturedSdkSessionId = undefined
               skipNextRetryDelay = true
               lastRetryableError = prepareResumeFallbackRecovery(
                 sessionId, queryOptions, contextualMessage, agentCwd, accumulatedMessages, queryStartedAt,
@@ -296,7 +298,7 @@ export async function executeQuery(deps: QueryExecutorDeps): Promise<void> {
 
       if (isSessionNotFoundError(rawErrorMessage, stderrOutput) && existingSdkSessionId && canAutoRetry(attempt)) {
         existingSdkSessionId = undefined
-        capturedSdkSessionId = undefined
+        executorState.capturedSdkSessionId = undefined
         lastRetryableError = prepareSessionNotFoundRecovery(sessionId, queryOptions, contextualMessage, agentCwd, accumulatedMessages, queryStartedAt)
         stderrChunks.length = 0
         continue
@@ -309,7 +311,7 @@ export async function executeQuery(deps: QueryExecutorDeps): Promise<void> {
         thinkingSignatureRecoveryAttempted = true
         invisibleRecoveryAttempts += 1
         existingSdkSessionId = undefined
-        capturedSdkSessionId = undefined
+        executorState.capturedSdkSessionId = undefined
         skipNextRetryDelay = true
         lastRetryableError = prepareResumeFallbackRecovery(
           sessionId, queryOptions, contextualMessage, agentCwd, accumulatedMessages, queryStartedAt,

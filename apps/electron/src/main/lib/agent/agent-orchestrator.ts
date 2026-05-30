@@ -26,9 +26,11 @@ import { permissionService } from './agent-permission-service'
 import type { PermissionResult, CanUseToolOptions } from './agent-permission-service'
 import { getMemoryConfig } from '../memory/memory-service'
 import { resolveSDKCliPath, collectAttachedDirectories, supports1MContext, TITLE_PROMPT, MAX_TITLE_LENGTH, DEFAULT_SESSION_TITLE, DEFAULT_MODEL_ID } from './agent-orchestrator-utils'
-import { executeQuery } from './agent-query-executor'
+import { executeQuery, type ExecutorState } from './agent-query-executor'
 import { createPipelineContext, runPreflightStages, stageAcquireSlot, stageResolveSession, stagePersistUserMessage, stageInitSdk, stageEnsureSdkSettings, stageInjectTools, stageBuildPrompt, releaseActiveRun, stageSyncCredentialsToProcessEnv, stageBuildSdkEnv } from './agent-pipeline-stages'
 import { createPermissionStrategy, type PermissionStrategyDeps } from './agent-permission-strategy'
+import { AgentEventBus } from './agent-event-bus'
+import { exitPlanService } from './agent-exit-plan-service'
 import { listChannels, decryptApiKey } from '../channel/channel-manager'
 
 // ===== 类型定义 =====
@@ -163,6 +165,9 @@ export class AgentOrchestrator {
         claudeAvailable,
       })
 
+      // 共享状态：onSessionId 回调写入，executeQuery 重试逻辑读取
+      const executorState: ExecutorState = { capturedSdkSessionId: ctx.existingSdkSessionId }
+
       const queryOptions: ClaudeAgentQueryOptions = {
         sessionId: ctx.sessionId,
         prompt: ctx.finalPrompt,
@@ -189,7 +194,7 @@ export class AgentOrchestrator {
         agents: buildBuiltinAgents(claudeAvailable),
         onStderr: (data: string) => { console.error(`[Agent SDK stderr] ${data}`) },
         onSessionId: (sdkSessionId: string) => {
-          capturedSdkSessionId = sdkSessionId
+          executorState.capturedSdkSessionId = sdkSessionId
           if (sdkSessionId !== ctx.existingSdkSessionId) {
             try { updateAgentSessionMeta(ctx.sessionId, { sdkSessionId }) } catch { /* 忽略 */ }
           }
@@ -210,7 +215,7 @@ export class AgentOrchestrator {
         sessionId: ctx.sessionId, existingSdkSessionId: ctx.existingSdkSessionId,
         contextualMessage: ctx.contextualMessage, agentCwd: ctx.agentCwd,
         modelId: input.modelId || DEFAULT_MODEL_ID, channelId: input.channelId, userMessage: input.userMessage,
-        streamStartedAt: ctx.streamStartedAt, callbacks, queryOptions,
+        streamStartedAt: ctx.streamStartedAt, callbacks, queryOptions, executorState,
         getActiveSession: () => this.activeSessions.get(ctx.sessionId),
         deactivateRun: () => { if (this.activeSessions.get(ctx.sessionId) !== ctx.runGeneration) return; this.activeSessions.delete(ctx.sessionId); this.sessionPermissionModes.delete(ctx.sessionId) },
         isStoppedByUser: () => this.stoppedBySessions.has(ctx.sessionId),
