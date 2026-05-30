@@ -360,6 +360,19 @@ bun run generate:icons    # 生成应用图标
   - ❌ 如果标记为 external：必须在 `electron-builder.yml` 的 `files` 中手动列出所有子依赖
 - **常见错误**：将普通 npm 包标记为 external 但忘记在 `files` 中包含，导致打包后找不到模块（如 `Cannot find module 'universalify'`）
 
+## 文档规范
+
+### CLAUDE.md / AGENTS.md 必备内容
+
+项目根目录及每个子包目录下的 `CLAUDE.md` 或 `AGENTS.md` 文件，**必须**包含以下四类信息：
+
+1. **架构图（Architecture Diagram）**：用 Mermaid 或文本图展示模块/包的层次关系和依赖边界
+2. **数据流向图（Data Flow Diagram）**：展示关键数据（用户输入、IPC 消息、Agent 事件、状态更新）在各层之间的流转路径
+3. **时序图（Sequence Diagram）**：展示核心流程（如 Agent 调用、Chat 流式响应、IPC 通信）中各组件的交互时序
+4. **重要代码文件导航（File Index）**：列出当前目录下关键源文件的路径、职责和行数概览，让读者能快速定位入口点和核心逻辑
+
+> 新创建的包或模块目录，必须同步建立满足上述要求的 CLAUDE.md。
+
 ## 代码风格
 
 - 永远不要使用 `any` 类型 — 创建合适的 interface
