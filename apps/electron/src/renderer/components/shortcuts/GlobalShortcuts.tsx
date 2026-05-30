@@ -10,6 +10,7 @@
  */
 
 import React, { useEffect, useCallback } from 'react'
+import { unstable_batchedUpdates } from 'react-dom'
 import type { VoiceDictationSettings } from '../../../types'
 import { useAtomValue, useSetAtom, useAtom, useStore } from 'jotai'
 import { appModeAtom } from '@/atoms/app-mode'
@@ -32,6 +33,8 @@ import {
   currentAgentWorkspaceIdAtom,
   agentWorkspacesAtom,
   agentAttachedFilesMapAtom,
+  liveMessagesMapAtom,
+  agentMessageRefreshAtom,
 } from '@/atoms/agent-atoms'
 import {
   chatPendingMessageAtom,
@@ -63,25 +66,28 @@ function tryAutoSendAgent(
   const sessionId = store.get(currentAgentSessionIdAtom)
   const workspaceId = store.get(currentAgentWorkspaceIdAtom)
   if (!sessionId || !channelId) return
-  setTimeout(() => {
-    // 发送前先清除草稿，给用户即时反馈
-    store.set(agentSessionDraftsAtom, (prev) => {
-      const map = new Map(prev)
-      map.delete(sessionId)
-      return map
-    })
-    store.set(agentSessionDraftHtmlAtom, (prev) => {
-      const map = new Map(prev)
-      map.delete(sessionId)
-      return map
-    })
-    window.electronAPI.sendAgentMessage({
-      sessionId,
-      userMessage: text,
-      channelId,
-      workspaceId: workspaceId ?? undefined,
-    }).catch(console.error)
-  }, 150)
+
+  // 先清除草稿，给用户即时反馈
+  store.set(agentSessionDraftsAtom, (prev) => {
+    const map = new Map(prev)
+    map.delete(sessionId)
+    return map
+  })
+  store.set(agentSessionDraftHtmlAtom, (prev) => {
+    const map = new Map(prev)
+    map.delete(sessionId)
+    return map
+  })
+
+  // 立即发送消息
+  window.electronAPI.sendAgentMessage({
+    sessionId,
+    userMessage: text,
+    channelId,
+    workspaceId: workspaceId ?? undefined,
+  }).catch((error) => {
+    console.error('[语音自动发送] 发送失败:', error)
+  })
 }
 
 /**
@@ -391,7 +397,11 @@ export function GlobalShortcuts(): null {
       if (insertedAtCursor) {
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
         // 语音自动发送（光标路径）：文本已插入编辑器，直接调 sendAgentMessage
-        tryAutoSendAgent(store, trimmed, voiceDictationSettings)
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            tryAutoSendAgent(store, trimmed, voiceDictationSettings)
+          })
+        })
         return
       }
 
@@ -413,6 +423,8 @@ export function GlobalShortcuts(): null {
         const sessionId = target.sessionId
         store.set(appModeAtom, 'agent')
         store.set(currentAgentSessionIdAtom, sessionId)
+
+        // 1. 先写入输入框（模拟人类打字）
         store.set(agentSessionDraftsAtom, (prev) => {
           const map = new Map(prev)
           const current = map.get(sessionId) ?? ''
@@ -424,8 +436,58 @@ export function GlobalShortcuts(): null {
           map.delete(sessionId)
           return map
         })
+
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
-        tryAutoSendAgent(store, trimmed, voiceDictationSettings)
+
+        // 2. 等待 React 渲染输入框后立即发送消息
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            // 清空输入框
+            store.set(agentSessionDraftsAtom, (prev) => {
+              const map = new Map(prev)
+              map.delete(sessionId)
+              return map
+            })
+            store.set(agentSessionDraftHtmlAtom, (prev) => {
+              const map = new Map(prev)
+              map.delete(sessionId)
+              return map
+            })
+
+            // 先发送消息（异步）
+            const channelId = store.get(agentChannelIdAtom)
+            const workspaceId = store.get(currentAgentWorkspaceIdAtom)
+            const voiceSettings = voiceDictationSettings
+
+            if (!shouldAutoSend(trimmed, voiceSettings?.autoSendEnabled ?? true, 'always')) {
+              return
+            }
+
+            if (!channelId) {
+              console.warn('[语音自动发送] 没有可用的渠道')
+              return
+            }
+
+            // 发送消息并等待完成
+            window.electronAPI.sendAgentMessage({
+              sessionId,
+              userMessage: trimmed,
+              channelId,
+              workspaceId: workspaceId ?? undefined,
+            })
+              .then(() => {
+                // 消息发送成功后，立即触发刷新
+                store.set(agentMessageRefreshAtom, (prev) => {
+                  const map = new Map(prev)
+                  map.set(sessionId, (prev.get(sessionId) ?? 0) + 1)
+                  return map
+                })
+              })
+              .catch((error) => {
+                console.error('[语音自动发送] 发送失败:', error)
+              })
+          })
+        })
         return
       }
 
