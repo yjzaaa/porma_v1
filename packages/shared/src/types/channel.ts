@@ -67,6 +67,7 @@ export const AGENT_COMPATIBLE_PROVIDERS: ReadonlySet<ProviderType> = new Set<Pro
   'kimi-api',
   'kimi-coding',
   'minimax',
+  'zhipu',
 ])
 
 /**
