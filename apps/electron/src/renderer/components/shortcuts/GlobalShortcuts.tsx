@@ -9,7 +9,8 @@
  * 4. 监听菜单 IPC 事件（Cmd+W 关闭标签）
  */
 
-import { useEffect, useCallback } from 'react'
+import React, { useEffect, useCallback } from 'react'
+import type { VoiceDictationSettings } from '../../../types'
 import { useAtomValue, useSetAtom, useAtom, useStore } from 'jotai'
 import { appModeAtom } from '@/atoms/app-mode'
 import { settingsOpenAtom, channelFormDirtyAtom, settingsCloseRequestedAtom } from '@/atoms/settings-tab'
@@ -51,8 +52,13 @@ import { getFileParentPath } from '@/lib/file-utils'
 import { shouldAutoSend } from '@/components/voice-dictation/voice-auto-send'
 
 /** 语音自动发送：判断文本完整性后直接发送到 Agent，成功后清除草稿 */
-function tryAutoSendAgent(store: ReturnType<typeof import('jotai').useStore>, text: string) {
-  if (!shouldAutoSend(text)) return
+function tryAutoSendAgent(
+  store: ReturnType<typeof import('jotai').useStore>,
+  text: string,
+  voiceSettings: VoiceDictationSettings | null
+) {
+  // 使用新的签名，传递语音设置
+  if (!shouldAutoSend(text, voiceSettings?.autoSendEnabled ?? true, 'always')) return
   const channelId = store.get(agentChannelIdAtom)
   const sessionId = store.get(currentAgentSessionIdAtom)
   const workspaceId = store.get(currentAgentWorkspaceIdAtom)
@@ -93,6 +99,7 @@ export function GlobalShortcuts(): null {
   const setShortcutOverrides = useSetAtom(shortcutOverridesAtom)
   const shortcutOverrides = useAtomValue(shortcutOverridesAtom)
   const setSendWithCmdEnter = useSetAtom(sendWithCmdEnterAtom)
+  const [voiceDictationSettings, setVoiceDictationSettings] = React.useState<VoiceDictationSettings | null>(null)
   const { createChat, createAgent } = useCreateSession()
 
   // Tab 管理（用于关闭标签页）
@@ -112,6 +119,11 @@ export function GlobalShortcuts(): null {
         updateShortcutOverrides(settings.shortcutOverrides)
       }
       setSendWithCmdEnter(settings.sendWithCmdEnter ?? false)
+    }).catch(console.error)
+
+    // 获取语音输入设置
+    window.electronAPI.getVoiceDictationSettings().then((voiceSettings) => {
+      setVoiceDictationSettings(voiceSettings)
     }).catch(console.error)
   }, [setShortcutOverrides, setSendWithCmdEnter])
 
@@ -379,7 +391,7 @@ export function GlobalShortcuts(): null {
       if (insertedAtCursor) {
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
         // 语音自动发送（光标路径）：文本已插入编辑器，直接调 sendAgentMessage
-        tryAutoSendAgent(store, trimmed)
+        tryAutoSendAgent(store, trimmed, voiceDictationSettings)
         return
       }
 
@@ -413,7 +425,7 @@ export function GlobalShortcuts(): null {
           return map
         })
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
-        tryAutoSendAgent(store, trimmed)
+        tryAutoSendAgent(store, trimmed, voiceDictationSettings)
         return
       }
 
