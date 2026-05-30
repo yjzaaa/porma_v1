@@ -41,6 +41,12 @@ export function VoiceDictationApp(): React.ReactElement {
   const settingsRef = React.useRef<VoiceDictationSettings | null>(null)
   const commitTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const commitInFlightRef = React.useRef(false)
+  /** VAD: 最后一次检测到语音的时间戳（ms），-1 表示尚未开始录音 */
+  const silenceSinceRef = React.useRef<number>(-1)
+  /** VAD: 录音开始时间戳（ms） */
+  const recordingStartedAtRef = React.useRef<number>(0)
+  /** VAD: 静音超时定时器 */
+  const vadTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const {
     rootRef,
@@ -86,6 +92,10 @@ export function VoiceDictationApp(): React.ReactElement {
       pendingAudioRef.current = []
       queuedAudioRef.current = []
       asrReadyRef.current = false
+    }
+    if (vadTimerRef.current) {
+      clearTimeout(vadTimerRef.current)
+      vadTimerRef.current = null
     }
     setVolume(0)
   }, [])
@@ -244,6 +254,36 @@ export function VoiceDictationApp(): React.ReactElement {
       }
       setVolume(Math.min(1, peak * 4))
 
+      // VAD 静音检测：音量超过阈值则刷新语音时间戳
+      const VAD_THRESHOLD = 0.01
+      const now = Date.now()
+      if (peak >= VAD_THRESHOLD) {
+        silenceSinceRef.current = now
+      }
+      // 录音未就绪（silenceSinceRef 尚未初始化）时跳过 VAD
+      if (silenceSinceRef.current < 0) {
+        // continue to PCM processing below
+      } else {
+        // 清除上次的 VAD 定时器，重新检查
+        if (vadTimerRef.current) {
+          clearTimeout(vadTimerRef.current)
+          vadTimerRef.current = null
+        }
+        const settings = settingsRef.current
+        const timeoutMs = settings?.vadStopTimeoutMs ?? 0
+        const minRecordMs = settings?.vadMinRecordMs ?? 500
+        if (
+          timeoutMs > 0 &&
+          now - silenceSinceRef.current >= timeoutMs &&
+          now - recordingStartedAtRef.current >= minRecordMs
+        ) {
+          vadTimerRef.current = setTimeout(() => {
+            vadTimerRef.current = null
+            stopRecording().catch(() => {})
+          }, 0)
+        }
+      }
+
       const pcm = floatTo16BitPcm(input, audioContext.sampleRate)
       pendingAudioRef.current.push(pcm)
       let merged = concatAudioBuffers(pendingAudioRef.current)
@@ -289,6 +329,12 @@ export function VoiceDictationApp(): React.ReactElement {
       clearTimeout(commitTimerRef.current)
       commitTimerRef.current = null
     }
+    if (vadTimerRef.current) {
+      clearTimeout(vadTimerRef.current)
+      vadTimerRef.current = null
+    }
+    silenceSinceRef.current = Date.now()
+    recordingStartedAtRef.current = Date.now()
     asrReadyRef.current = false
     queuedAudioRef.current = []
     pendingAudioRef.current = []
@@ -372,6 +418,10 @@ export function VoiceDictationApp(): React.ReactElement {
         const textMessage = getMicrophoneErrorMessage(error)
         setStatus('error')
         setMessage(textMessage)
+        if (vadTimerRef.current) {
+          clearTimeout(vadTimerRef.current)
+          vadTimerRef.current = null
+        }
         cleanupAudio()
       })
     })

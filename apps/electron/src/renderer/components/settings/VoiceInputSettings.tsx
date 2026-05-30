@@ -28,6 +28,20 @@ const OUTPUT_OPTIONS = [
   { value: 'proma-input', label: '仅写入 Proma 输入框' },
 ]
 
+const VAD_TIMEOUT_OPTIONS = [
+  { value: '0', label: '禁用自动停止' },
+  { value: '1000', label: '1.0 秒' },
+  { value: '1800', label: '1.8 秒（推荐）' },
+  { value: '3000', label: '3.0 秒' },
+  { value: '5000', label: '5.0 秒' },
+]
+
+const VAD_MIN_RECORD_OPTIONS = [
+  { value: '300', label: '300 毫秒' },
+  { value: '500', label: '500 毫秒（推荐）' },
+  { value: '1000', label: '1.0 秒' },
+]
+
 const LANGUAGE_OPTIONS = [
   { value: 'auto', label: '自动识别' },
   { value: 'zh-CN', label: '中文普通话' },
@@ -269,6 +283,25 @@ export function VoiceInputSettings(): React.ReactElement {
             value={settings.outputMode}
             onValueChange={(outputMode) => update({ outputMode: outputMode as VoiceDictationSettings['outputMode'] })}
             options={OUTPUT_OPTIONS}
+          />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="VAD 自动停止">
+        <SettingsCard>
+          <SettingsSelect
+            label="静音超时"
+            description={'说完话后静音多久自动停止录音。设为"禁用"则恢复手动停止。'}
+            value={String(settings.vadStopTimeoutMs)}
+            onValueChange={(v) => update({ vadStopTimeoutMs: Number(v) })}
+            options={VAD_TIMEOUT_OPTIONS}
+          />
+          <SettingsSelect
+            label="最短录音时长"
+            description="低于此时长的录音不触发自动停止，防止误触发。"
+            value={String(settings.vadMinRecordMs)}
+            onValueChange={(v) => update({ vadMinRecordMs: Number(v) })}
+            options={VAD_MIN_RECORD_OPTIONS}
           />
         </SettingsCard>
       </SettingsSection>

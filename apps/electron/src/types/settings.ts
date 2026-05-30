@@ -59,6 +59,10 @@ export interface VoiceDictationSettings {
   customHotwords: string
   /** 语音输入浮窗上次拖动后的位置 */
   windowPosition?: VoiceDictationWindowPosition
+  /** VAD 自动停止：静音多少毫秒后自动停止录音，0 表示禁用 */
+  vadStopTimeoutMs: number
+  /** VAD 自动停止：最短录音时长（毫秒），低于此时长不触发自动停止 */
+  vadMinRecordMs: number
 }
 
 /** 语音输入设置更新 */

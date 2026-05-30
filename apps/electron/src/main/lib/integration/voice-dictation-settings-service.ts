@@ -18,6 +18,8 @@ const DEFAULT_VOICE_DICTATION_SETTINGS: VoiceDictationSettings = {
   endpointMode: 'async',
   outputMode: 'auto',
   customHotwords: '',
+  vadStopTimeoutMs: 1800,
+  vadMinRecordMs: 500,
 }
 
 function encryptSecret(value: string): string {
