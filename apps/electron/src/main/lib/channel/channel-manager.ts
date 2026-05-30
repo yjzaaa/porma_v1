@@ -467,8 +467,10 @@ export async function fetchModels(input: FetchModelsInput): Promise<FetchModelsR
       case 'kimi-coding':
       case 'minimax':
         return await fetchAnthropicCompatibleModels(input.baseUrl, input.apiKey, proxyUrl, input.provider)
-      case 'openai':
       case 'zhipu':
+        // 智谱 Anthropic 端点不支持 /models，始终使用 OpenAI 端点拉取模型列表
+        return await fetchOpenAICompatibleModels('https://open.bigmodel.cn/api/paas/v4', input.apiKey, proxyUrl)
+      case 'openai':
       case 'doubao':
       case 'qwen':
       case 'custom':
