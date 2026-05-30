@@ -12,6 +12,7 @@
 import React, { useEffect, useCallback } from 'react'
 import { unstable_batchedUpdates } from 'react-dom'
 import type { VoiceDictationSettings } from '../../../types'
+import type { SDKMessage } from '@proma/shared'
 import { useAtomValue, useSetAtom, useAtom, useStore } from 'jotai'
 import { appModeAtom } from '@/atoms/app-mode'
 import { settingsOpenAtom, channelFormDirtyAtom, settingsCloseRequestedAtom } from '@/atoms/settings-tab'
@@ -95,6 +96,19 @@ function tryAutoSendAgent(
       inputTokens: existing?.inputTokens,
       contextWindow: existing?.contextWindow,
     })
+    return map
+  })
+
+  // 乐观插入用户消息，让聊天区立即显示
+  store.set(liveMessagesMapAtom, (prev: Map<string, SDKMessage[]>) => {
+    const map = new Map(prev)
+    const existing = map.get(sessionId) ?? []
+    map.set(sessionId, [...existing, {
+      type: 'user',
+      message: { content: [{ type: 'text', text }] },
+      parent_tool_use_id: null,
+      _createdAt: streamStartedAt,
+    } as unknown as SDKMessage])
     return map
   })
 
