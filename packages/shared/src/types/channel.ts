@@ -202,4 +202,6 @@ export const CHANNEL_IPC_CHANNELS = {
   FETCH_MODELS: 'channel:fetch-models',
   /** 直接测试连接（无需已保存渠道，传入明文凭证） */
   TEST_DIRECT: 'channel:test-direct',
+  /** 自动刷新所有已启用渠道的模型列表（内部解密 Key） */
+  REFRESH_MODELS: 'channel:refresh-models',
 } as const

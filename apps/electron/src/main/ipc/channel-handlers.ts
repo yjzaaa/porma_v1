@@ -7,7 +7,7 @@
 import { ipcMain } from 'electron'
 import { CHANNEL_IPC_CHANNELS } from '@proma/shared'
 import type { Channel, ChannelCreateInput, ChannelUpdateInput, ChannelTestResult, FetchModelsInput, FetchModelsResult } from '@proma/shared'
-import { listChannels, createChannel, updateChannel, deleteChannel, decryptApiKey, testChannel, testChannelDirect, fetchModels } from '../lib/channel/channel-manager'
+import { listChannels, createChannel, updateChannel, deleteChannel, decryptApiKey, testChannel, testChannelDirect, fetchModels, refreshAllChannelModels } from '../lib/channel/channel-manager'
 
 export function registerChannelHandlers(): void {
   // 获取所有渠道（apiKey 保持加密态）
@@ -71,6 +71,14 @@ export function registerChannelHandlers(): void {
     CHANNEL_IPC_CHANNELS.FETCH_MODELS,
     async (_, input: FetchModelsInput): Promise<FetchModelsResult> => {
       return fetchModels(input)
+    }
+  )
+
+  // 自动刷新所有已启用渠道的模型列表（内部解密 Key）
+  ipcMain.handle(
+    CHANNEL_IPC_CHANNELS.REFRESH_MODELS,
+    async (): Promise<Channel[]> => {
+      return refreshAllChannelModels()
     }
   )
 }

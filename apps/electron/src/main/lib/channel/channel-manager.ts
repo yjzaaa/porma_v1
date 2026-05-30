@@ -486,6 +486,63 @@ export async function fetchModels(input: FetchModelsInput): Promise<FetchModelsR
 }
 
 /**
+ * 自动刷新所有已启用渠道的模型列表
+ *
+ * 遍历所有 enabled 渠道，内部解密 API Key 后从 Provider API 拉取最新模型，
+ * 合并到已有模型列表中（保留已有启用状态，新模型默认 enabled: false），
+ * 持久化并返回更新后的渠道列表。
+ */
+export async function refreshAllChannelModels(): Promise<Channel[]> {
+  const config = readConfig()
+  const enabledChannels = config.channels.filter((c) => c.enabled)
+
+  // 并行拉取所有已启用渠道的模型
+  const results = await Promise.allSettled(
+    enabledChannels.map(async (channel) => {
+      const apiKey = decryptKey(channel.apiKey)
+      if (!apiKey) return null
+
+      const result = await fetchModels({
+        provider: channel.provider,
+        baseUrl: channel.baseUrl,
+        apiKey,
+      })
+
+      if (!result.success || result.models.length === 0) return null
+
+      // 合并：已有模型保留启用状态，新模型默认 enabled: false
+      const existingIds = new Set(channel.models.map((m) => m.id))
+      const newModels = result.models
+        .filter((m) => !existingIds.has(m.id))
+        .map((m) => ({ ...m, enabled: false }))
+
+      if (newModels.length === 0) return null
+
+      return { channelId: channel.id, mergedModels: [...channel.models, ...newModels] }
+    })
+  )
+
+  // 持久化有更新的渠道
+  let hasChanges = false
+  for (const r of results) {
+    if (r.status !== 'fulfilled' || !r.value) continue
+    const { channelId, mergedModels } = r.value
+    const ch = config.channels.find((c) => c.id === channelId)
+    if (ch) {
+      ch.models = mergedModels
+      ch.updatedAt = Date.now()
+      hasChanges = true
+    }
+  }
+
+  if (hasChanges) {
+    writeConfig(config)
+  }
+
+  return config.channels
+}
+
+/**
  * Anthropic API 模型响应项
  */
 interface AnthropicModelItem {

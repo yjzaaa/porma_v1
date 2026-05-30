@@ -87,6 +87,7 @@ export interface ElectronAPI {
   testChannel: (channelId: string) => Promise<import('@proma/shared').ChannelTestResult>
   testChannelDirect: (input: import('@proma/shared').FetchModelsInput) => Promise<import('@proma/shared').ChannelTestResult>
   fetchModels: (input: import('@proma/shared').FetchModelsInput) => Promise<import('@proma/shared').FetchModelsResult>
+  refreshModels: () => Promise<import('@proma/shared').Channel[]>
 
   listConversations: () => Promise<import('@proma/shared').ConversationMeta[]>
   createConversation: (title?: string, modelId?: string, channelId?: string) => Promise<import('@proma/shared').ConversationMeta>

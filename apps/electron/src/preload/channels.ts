@@ -24,6 +24,7 @@ const api: Record<string, unknown> = {
   testChannel: (channelId: string) => ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.TEST, channelId),
   testChannelDirect: (input: FetchModelsInput) => ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.TEST_DIRECT, input),
   fetchModels: (input: FetchModelsInput) => ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.FETCH_MODELS, input),
+  refreshModels: () => ipcRenderer.invoke(CHANNEL_IPC_CHANNELS.REFRESH_MODELS),
 }
 
 export default api

@@ -99,11 +99,16 @@ export function ModelSelector({
   // 外部模型优先 → per-conversation 模型
   const selectedModel = externalSelectedModel !== undefined ? externalSelectedModel : conversationModel
 
-  // 每次打开 Dialog 时刷新渠道列表，确保最新
+  // 每次打开 Dialog 时刷新渠道列表，并后台自动拉取最新模型
   React.useEffect(() => {
     if (open) {
+      // 立即显示已有模型
       window.electronAPI.listChannels().then(setChannels).catch(console.error)
       setSearch('')
+      // 后台从所有已启用渠道的 Provider API 拉取最新模型
+      window.electronAPI.refreshModels().then((updated) => {
+        setChannels(updated)
+      }).catch(console.error)
     }
   }, [open, setChannels])
 
