@@ -122,9 +122,11 @@ export function useAgentSessionLoad(sessionId: string): AgentSessionLoadResult {
     return () => { cancelled = true }
   }, [sessionId, refreshVersion, setStreamingStates, setLiveMessagesMap, store])
 
-  // 获取 session 路径
+  // 获取 session 路径（含重试：工作区信息可能尚未同步到主进程）
+  const sessionPathRetryRef = React.useRef(0)
   React.useEffect(() => {
     if (!currentWorkspaceId) {
+      sessionPathRetryRef.current = 0
       setSessionPathMap((prev) => {
         const map = new Map(prev)
         map.delete(sessionId)
@@ -133,30 +135,52 @@ export function useAgentSessionLoad(sessionId: string): AgentSessionLoadResult {
       return
     }
 
-    window.electronAPI
-      .getAgentSessionPath(currentWorkspaceId, sessionId)
-      .then((path) => {
-        if (path) {
-          setSessionPathMap((prev) => {
-            const map = new Map(prev)
-            map.set(sessionId, path)
-            return map
-          })
-        } else {
-          setSessionPathMap((prev) => {
-            const map = new Map(prev)
-            map.delete(sessionId)
-            return map
-          })
-        }
-      })
-      .catch(() => {
-        setSessionPathMap((prev) => {
-          const map = new Map(prev)
-          map.delete(sessionId)
-          return map
+    let cancelled = false
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 500
+
+    const fetchPath = (attempt: number) => {
+      window.electronAPI
+        .getAgentSessionPath(currentWorkspaceId, sessionId)
+        .then((path) => {
+          if (cancelled) return
+          if (path) {
+            sessionPathRetryRef.current = 0
+            setSessionPathMap((prev) => {
+              const map = new Map(prev)
+              map.set(sessionId, path)
+              return map
+            })
+          } else if (attempt < MAX_RETRIES) {
+            sessionPathRetryRef.current = attempt + 1
+            setTimeout(() => fetchPath(attempt + 1), RETRY_DELAY)
+          } else {
+            sessionPathRetryRef.current = 0
+            setSessionPathMap((prev) => {
+              const map = new Map(prev)
+              map.delete(sessionId)
+              return map
+            })
+          }
         })
-      })
+        .catch(() => {
+          if (cancelled) return
+          if (attempt < MAX_RETRIES) {
+            sessionPathRetryRef.current = attempt + 1
+            setTimeout(() => fetchPath(attempt + 1), RETRY_DELAY)
+          } else {
+            sessionPathRetryRef.current = 0
+            setSessionPathMap((prev) => {
+              const map = new Map(prev)
+              map.delete(sessionId)
+              return map
+            })
+          }
+        })
+    }
+
+    fetchPath(0)
+    return () => { cancelled = true }
   }, [sessionId, currentWorkspaceId, setSessionPathMap])
 
   // 获取工作区文件路径
