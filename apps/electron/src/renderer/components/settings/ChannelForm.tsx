@@ -26,6 +26,7 @@ import {
 import { toast } from 'sonner'
 import { useSetAtom } from 'jotai'
 import { channelFormDirtyAtom } from '@/atoms/settings-tab'
+import { channelsAtom } from '@/atoms/chat-atoms'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -167,7 +168,10 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
   const [showExitDialog, setShowExitDialog] = React.useState(false)
 
   const setChannelFormDirty = useSetAtom(channelFormDirtyAtom)
+  const setGlobalChannels = useSetAtom(channelsAtom)
   const lastAgentEligibleRef = React.useRef(channel ? isAgentEligibleChannel(channel) : false)
+  /** 编辑模式下是否已尝试过自动拉取（防止重复触发） */
+  const hasAutoFetchedRef = React.useRef(false)
 
   React.useEffect(() => {
     lastAgentEligibleRef.current = channel ? isAgentEligibleChannel(channel) : false
@@ -215,12 +219,16 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
         lastAgentEligibleRef.current = eligible
         await onAgentEligibilityChange?.(savedChannel, eligible)
       }
+      // 同步更新全局 atom，让 Chat/Agent 模型选择器实时响应变更
+      setGlobalChannels((prev) =>
+        prev.map((c) => c.id === savedChannel.id ? savedChannel : c)
+      )
       toast.success('已保存', { id: 'auto-save-success' })
     } catch (error) {
       console.error('[模型配置表单] auto-save 失败:', error)
       toast.error('自动保存失败，请检查后手动重试', { id: 'auto-save-error' })
     }
-  }, [isEdit, channel, onAgentEligibilityChange])
+  }, [isEdit, channel, onAgentEligibilityChange, setGlobalChannels])
 
   /** 触发防抖 auto-save */
   const scheduleAutoSave = React.useCallback((
@@ -255,6 +263,24 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
     scheduleAutoSave(models, name, provider, baseUrl, apiKey, enabled)
     return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current) }
   }, [models, name, provider, baseUrl, apiKey, enabled, scheduleAutoSave])
+
+  // 编辑模式：首次加载渠道无模型时自动拉取
+  React.useEffect(() => {
+    if (
+      !isEdit ||
+      !apiKeyLoaded ||
+      hasAutoFetchedRef.current ||
+      models.length > 0 ||
+      !apiKey.trim() ||
+      !baseUrl.trim()
+    ) return
+
+    hasAutoFetchedRef.current = true
+    // 延迟 300ms 确保 initializedRef 已设置，避免与 auto-save 时序冲突
+    const t = setTimeout(() => { doAutoFetchModels(models) }, 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, apiKeyLoaded, models.length, apiKey, baseUrl])
 
   // 切换供应商时自动更新 Base URL，Anthropic 兼容渠道自动添加预设模型
   const handleProviderChange = (newProvider: string): void => {
@@ -345,6 +371,36 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
     }
   }
 
+  /** 自动拉取模型（静默失败，不阻塞主流程） */
+  const doAutoFetchModels = React.useCallback(async (
+    currentModels: ChannelModel[],
+  ): Promise<ChannelModel[]> => {
+    if (!apiKey.trim() || !baseUrl.trim()) return currentModels
+
+    setFetchingModels(true)
+    try {
+      const result = await window.electronAPI.fetchModels({ provider, baseUrl, apiKey })
+      if (result.success && result.models.length > 0) {
+        const existingIds = new Set(currentModels.map((m) => m.id))
+        const newModels = result.models
+          .filter((m) => !existingIds.has(m.id))
+          .map((m) => ({ ...m, enabled: false }))
+        if (newModels.length > 0) {
+          const merged = [...currentModels, ...newModels]
+          setModels(merged)
+          toast.success(`自动获取了 ${newModels.length} 个模型，请在编辑中启用需要的模型`)
+          return merged
+        }
+      }
+      return currentModels
+    } catch {
+      // 静默失败——用户可通过手动「从供应商获取」按钮重试
+      return currentModels
+    } finally {
+      setFetchingModels(false)
+    }
+  }, [provider, baseUrl, apiKey])
+
   /** 测试连接（直接使用表单当前值，无需先保存） */
   const handleTest = async (): Promise<void> => {
     if (!apiKey.trim() || !baseUrl.trim()) return
@@ -367,7 +423,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
   }
 
   /** 执行创建渠道 */
-  const doCreate = React.useCallback(async (): Promise<Channel | null> => {
+  const doCreate = React.useCallback(async (options?: { autoFetch?: boolean }): Promise<Channel | null> => {
     if (!name.trim() || !apiKey.trim()) return null
 
     setSaving(true)
@@ -381,6 +437,22 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
         enabled,
       }
       const savedChannel = await window.electronAPI.createChannel(input)
+
+      // 自动拉取模型：创建成功后从供应商获取可用模型并持久化
+      if (options?.autoFetch) {
+        const mergedModels = await doAutoFetchModels(models)
+        if (mergedModels.length > models.length) {
+          const updated = await window.electronAPI.updateChannel(savedChannel.id, {
+            models: mergedModels,
+          })
+          if (isAgentEligibleChannel(updated)) {
+            await onAgentEligibilityChange?.(updated, true)
+          }
+          toast.success('渠道创建成功')
+          return updated
+        }
+      }
+
       if (isAgentEligibleChannel(savedChannel)) {
         await onAgentEligibilityChange?.(savedChannel, true)
       }
@@ -393,15 +465,11 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
     } finally {
       setSaving(false)
     }
-  }, [name, provider, baseUrl, apiKey, models, enabled, onAgentEligibilityChange])
+  }, [name, provider, baseUrl, apiKey, models, enabled, onAgentEligibilityChange, doAutoFetchModels])
 
   /** 创建渠道（仅新建模式） */
   const handleCreate = async (): Promise<void> => {
-    if (models.length === 0) {
-      toast.warning('尚未配置模型，建议先从供应商获取或手动添加', { id: 'no-models-warn' })
-      return
-    }
-    const savedChannel = await doCreate()
+    const savedChannel = await doCreate({ autoFetch: models.length === 0 })
     if (savedChannel) onSaved(savedChannel)
   }
 
@@ -430,7 +498,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
 
   /** 保存并关闭（从弹窗触发） */
   const handleSaveAndClose = async (): Promise<void> => {
-    const savedChannel = await doCreate()
+    const savedChannel = await doCreate({ autoFetch: models.length === 0 })
     if (savedChannel) {
       setShowExitDialog(false)
       onSaved(savedChannel)
