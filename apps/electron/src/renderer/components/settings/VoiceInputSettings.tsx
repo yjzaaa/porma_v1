@@ -306,6 +306,17 @@ export function VoiceInputSettings(): React.ReactElement {
         </SettingsCard>
       </SettingsSection>
 
+      <SettingsSection title="自动发送">
+        <SettingsCard>
+          <SettingsToggle
+            label="启用自动发送"
+            description="语音识别完成后，系统自动判断文本是否为完整指令，是则自动发送，无需手动点击发送按钮。"
+            checked={settings.autoSendEnabled}
+            onCheckedChange={(autoSendEnabled) => update({ autoSendEnabled })}
+          />
+        </SettingsCard>
+      </SettingsSection>
+
       {saving && (
         <p className="text-xs text-muted-foreground">正在保存语音输入设置...</p>
       )}

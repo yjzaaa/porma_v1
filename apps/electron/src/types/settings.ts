@@ -63,6 +63,8 @@ export interface VoiceDictationSettings {
   vadStopTimeoutMs: number
   /** VAD 自动停止：最短录音时长（毫秒），低于此时长不触发自动停止 */
   vadMinRecordMs: number
+  /** 语义自动发送：语音识别完成后是否自动判断并发送完整指令 */
+  autoSendEnabled: boolean
 }
 
 /** 语音输入设置更新 */

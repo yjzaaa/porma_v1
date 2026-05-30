@@ -48,6 +48,35 @@ import {
   updateShortcutOverrides,
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
+import { shouldAutoSend } from '@/components/voice-dictation/voice-auto-send'
+
+/** 语音自动发送：判断文本完整性后直接发送到 Agent，成功后清除草稿 */
+function tryAutoSendAgent(store: ReturnType<typeof import('jotai').useStore>, text: string) {
+  if (!shouldAutoSend(text)) return
+  const channelId = store.get(agentChannelIdAtom)
+  const sessionId = store.get(currentAgentSessionIdAtom)
+  const workspaceId = store.get(currentAgentWorkspaceIdAtom)
+  if (!sessionId || !channelId) return
+  setTimeout(() => {
+    // 发送前先清除草稿，给用户即时反馈
+    store.set(agentSessionDraftsAtom, (prev) => {
+      const map = new Map(prev)
+      map.delete(sessionId)
+      return map
+    })
+    store.set(agentSessionDraftHtmlAtom, (prev) => {
+      const map = new Map(prev)
+      map.delete(sessionId)
+      return map
+    })
+    window.electronAPI.sendAgentMessage({
+      sessionId,
+      userMessage: text,
+      channelId,
+      workspaceId: workspaceId ?? undefined,
+    }).catch(console.error)
+  }, 150)
+}
 
 /**
  * 快捷键初始化 + 全局 Handler 注册
@@ -349,6 +378,8 @@ export function GlobalShortcuts(): null {
       }))
       if (insertedAtCursor) {
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
+        // 语音自动发送（光标路径）：文本已插入编辑器，直接调 sendAgentMessage
+        tryAutoSendAgent(store, trimmed)
         return
       }
 
@@ -382,6 +413,7 @@ export function GlobalShortcuts(): null {
           return map
         })
         window.dispatchEvent(new CustomEvent('proma:focus-input'))
+        tryAutoSendAgent(store, trimmed)
         return
       }
 
