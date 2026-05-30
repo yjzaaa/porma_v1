@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 保证充分的组件化以及人类的可读性，每次完成改动后都要思考这一点，运行@code-simplifier 来简化优化代码，保持简单直接不过渡设计的风格。
 - 在 UI 设计上采用更现代的方案，UI 组件推荐采用 ShadcnUI，在合适的情况下，用卡片和阴影取代边框，用符合主题的饱满色彩，设置界面要设置背景，为未来做不同主题留下空间。
 - 采用 BDD 行为驱动开发的方案。
+- 每个子目录下的 `CLAUDE.md` / `AGENTS.md` 必须包含：架构图（ASCII/mermaid）、数据流向图、关键时序图，以及重要代码文件的导航索引（文件路径 + 一句话职责说明）。
 
 ## 项目概述
 
@@ -359,6 +360,19 @@ bun run generate:icons    # 生成应用图标
   - ✅ 优点：避免遗漏子依赖，简化 electron-builder 配置
   - ❌ 如果标记为 external：必须在 `electron-builder.yml` 的 `files` 中手动列出所有子依赖
 - **常见错误**：将普通 npm 包标记为 external 但忘记在 `files` 中包含，导致打包后找不到模块（如 `Cannot find module 'universalify'`）
+
+## 文档规范
+
+### CLAUDE.md / AGENTS.md 必备内容
+
+项目根目录及每个子包目录下的 `CLAUDE.md` 或 `AGENTS.md` 文件，**必须**包含以下四类信息：
+
+1. **架构图（Architecture Diagram）**：用 Mermaid 或文本图展示模块/包的层次关系和依赖边界
+2. **数据流向图（Data Flow Diagram）**：展示关键数据（用户输入、IPC 消息、Agent 事件、状态更新）在各层之间的流转路径
+3. **时序图（Sequence Diagram）**：展示核心流程（如 Agent 调用、Chat 流式响应、IPC 通信）中各组件的交互时序
+4. **重要代码文件导航（File Index）**：列出当前目录下关键源文件的路径、职责和行数概览，让读者能快速定位入口点和核心逻辑
+
+> 新创建的包或模块目录，必须同步建立满足上述要求的 CLAUDE.md。
 
 ## 代码风格
 
