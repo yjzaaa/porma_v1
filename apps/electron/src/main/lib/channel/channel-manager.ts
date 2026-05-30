@@ -271,9 +271,9 @@ export async function testChannel(channelId: string): Promise<ChannelTestResult>
       case 'kimi-api':
       case 'kimi-coding':
       case 'minimax':
+      case 'zhipu':
         return await testAnthropicCompatible(channel.baseUrl, apiKey, proxyUrl, channel.provider)
       case 'openai':
-      case 'zhipu':
       case 'doubao':
       case 'qwen':
       case 'custom':
@@ -430,9 +430,9 @@ export async function testChannelDirect(input: FetchModelsInput): Promise<Channe
       case 'kimi-api':
       case 'kimi-coding':
       case 'minimax':
+      case 'zhipu':
         return await testAnthropicCompatible(input.baseUrl, input.apiKey, proxyUrl, input.provider)
       case 'openai':
-      case 'zhipu':
       case 'doubao':
       case 'qwen':
       case 'custom':
@@ -466,9 +466,9 @@ export async function fetchModels(input: FetchModelsInput): Promise<FetchModelsR
       case 'kimi-api':
       case 'kimi-coding':
       case 'minimax':
+      case 'zhipu':
         return await fetchAnthropicCompatibleModels(input.baseUrl, input.apiKey, proxyUrl, input.provider)
       case 'openai':
-      case 'zhipu':
       case 'doubao':
       case 'qwen':
       case 'custom':
