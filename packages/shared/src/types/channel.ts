@@ -31,7 +31,7 @@ export const PROVIDER_DEFAULT_URLS: Record<ProviderType, string> = {
   google: 'https://generativelanguage.googleapis.com',
   'kimi-api': 'https://api.moonshot.cn/anthropic',
   'kimi-coding': 'https://api.kimi.com/coding/v1',
-  zhipu: 'https://api.z.ai/api/anthropic',
+  zhipu: 'https://open.bigmodel.cn/api/paas/v4',
   minimax: 'https://api.minimaxi.com/anthropic',
   doubao: 'https://ark.cn-beijing.volces.com/api/v3',
   qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
