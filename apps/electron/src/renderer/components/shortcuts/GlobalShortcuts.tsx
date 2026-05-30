@@ -35,7 +35,9 @@ import {
   agentAttachedFilesMapAtom,
   liveMessagesMapAtom,
   agentMessageRefreshAtom,
+  agentStreamingStatesAtom,
 } from '@/atoms/agent-atoms'
+import type { AgentStreamState } from '@/atoms/agent-atoms'
 import {
   chatPendingMessageAtom,
   conversationDraftsAtom,
@@ -76,6 +78,23 @@ function tryAutoSendAgent(
   store.set(agentSessionDraftHtmlAtom, (prev) => {
     const map = new Map(prev)
     map.delete(sessionId)
+    return map
+  })
+
+  // 设置流式状态（与 useAgentSend 正常发送流程一致）
+  const streamStartedAt = Date.now()
+  store.set(agentStreamingStatesAtom, (prev: Map<string, AgentStreamState>) => {
+    const map = new Map(prev)
+    const existing = prev.get(sessionId)
+    map.set(sessionId, {
+      running: true,
+      content: '',
+      toolActivities: [],
+      model: undefined,
+      startedAt: streamStartedAt,
+      inputTokens: existing?.inputTokens,
+      contextWindow: existing?.contextWindow,
+    })
     return map
   })
 
