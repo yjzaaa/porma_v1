@@ -56,7 +56,6 @@ vendor
 .plans/
 
 # Additional docs generated during development
-docs/arch/
 docs/superpowers/
 gitnexus-homepage
 
