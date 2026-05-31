@@ -270,11 +270,11 @@ export function VoiceFloatingPanel(): React.ReactElement {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-                    {mode === 'stopping' ? 'Processing' : mode === 'completed' ? 'Done' : `Recording (${settings?.engine || 'doubao'})`}
+                    {mode === 'recording' ? `录音中` : message || (mode === 'stopping' ? '处理中' : '完成')}
                   </p>
                   {mode === 'recording' && <div className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-red-500 animate-pulse" /><span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase">REC</span></div>}
                 </div>
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{message || 'Listening...'}</p>
+                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{mode === 'recording' ? (message || '聆听中...') : ''}</p>
               </div>
             </div>
           </div>
