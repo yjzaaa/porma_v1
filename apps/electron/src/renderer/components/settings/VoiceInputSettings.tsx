@@ -104,7 +104,7 @@ export function VoiceInputSettings(): React.ReactElement {
 
   const update = React.useCallback(async (updates: Partial<VoiceDictationSettings>) => {
     if (!settings) return
-    const optimistic = { ...settings, engine: settings.engine || 'webspeech', ...updates, provider: 'doubao' as const }
+    const optimistic = { ...settings, engine: settings.engine || 'doubao', ...updates, provider: 'doubao' as const }
     setSettings(optimistic)
     setSaving(true)
     try {
@@ -328,7 +328,7 @@ export function VoiceInputSettings(): React.ReactElement {
           <SettingsSelect
             label="语音识别引擎"
             description="Web Speech 内置在浏览器中，无需配置；豆包需要火山引擎凭证。"
-            value={settings.engine || 'webspeech'}
+            value={settings.engine || 'doubao'}
             onValueChange={(engine) => update({ engine: engine as VoiceDictationSettings['engine'] })}
             options={ENGINE_OPTIONS}
           />
