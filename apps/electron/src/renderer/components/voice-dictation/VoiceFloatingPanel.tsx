@@ -28,7 +28,6 @@ export function VoiceFloatingPanel(): React.ReactElement {
 
     // 注入 auto-send 回调
     orch.onAutoSend = (text: string) => {
-      if (!shouldAutoSend(text, ui.settings?.autoSendEnabled ?? true, 'always')) return
       if (store.get(appModeAtom) !== 'agent') return
       const channelId = store.get(agentChannelIdAtom)
       const sessionId = store.get(currentAgentSessionIdAtom)
