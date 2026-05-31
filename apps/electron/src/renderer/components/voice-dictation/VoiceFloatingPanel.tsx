@@ -163,6 +163,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
           const channelId = store.get(agentChannelIdAtom)
           const sessionId = store.get(currentAgentSessionIdAtom)
           const workspaceId = store.get(currentAgentWorkspaceIdAtom)
+          console.log('[语音] auto-send:', { text: text.slice(0, 30), sessionId, channelId: !!channelId })
           if (sessionId && channelId) {
             store.set(agentSessionDraftsAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
             store.set(agentSessionDraftHtmlAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
@@ -178,7 +179,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
           }
         }
       }
-    }).catch(() => { cleanup(); setMode('error'); setMessage('输出失败') })
+    }).catch((err) => { console.error('[语音] commit 失败:', err); cleanup(); committedRef.current = false; setMode('error'); setMessage('输出失败') })
   }, [store])
 
   const stopRec = React.useCallback(async () => {
