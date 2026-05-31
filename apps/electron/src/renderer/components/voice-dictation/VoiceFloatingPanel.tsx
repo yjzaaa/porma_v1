@@ -122,6 +122,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
 
   // ---- ASR via Provider ----
   const beginASR = React.useCallback(async () => {
+    committedRef.current = false
     setTranscript(''); trRef.current = ''; setMessage('')
     setMode('recording'); setMessage('正在监听...')
     recStartRef.current = performance.now()
@@ -147,7 +148,10 @@ export function VoiceFloatingPanel(): React.ReactElement {
     } catch { setMode('error'); setMessage('识别引擎启动失败') }
   }, [])
 
+  const committedRef = React.useRef(false)
+
   const finishRecording = React.useCallback((text: string) => {
+    if (committedRef.current) return; committedRef.current = true
     if (!text) { cleanup(); setMode('idle'); setMessage(''); return }
     setMode('stopping'); setMessage('正在输出...')
     window.electronAPI.commitVoiceDictation({ text }).then(r => {
