@@ -154,34 +154,30 @@ export function VoiceFloatingPanel(): React.ReactElement {
     if (committedRef.current) return; committedRef.current = true
     if (!text) { cleanup(); setMode('idle'); setMessage(''); return }
 
-    // Agent 模式：跳过 commit（避免粘贴 fallback），直接 auto-send
-    const isAgent = store.get(appModeAtom) === 'agent'
-    const willAutoSend = isAgent && shouldAutoSend(text, settingsRef.current?.autoSendEnabled ?? true, 'always')
-
-    if (willAutoSend) {
-      cleanup(); setMode('completed'); setMessage('已发送')
-      const channelId = store.get(agentChannelIdAtom)
-      const sessionId = store.get(currentAgentSessionIdAtom)
-      const workspaceId = store.get(currentAgentWorkspaceIdAtom)
-      if (sessionId && channelId) {
-        store.set(agentSessionDraftsAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
-        store.set(agentSessionDraftHtmlAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
-        store.set(liveMessagesMapAtom, (prev) => {
-          const m = new Map(prev); const existing = m.get(sessionId) ?? []
-          m.set(sessionId, [...existing, { type: 'user', message: { content: [{ type: 'text', text }] }, parent_tool_use_id: null, _createdAt: Date.now() } as unknown as SDKMessage])
-          return m
-        })
-        store.set(agentStreamingStatesAtom, (prev) => {
-          const m = new Map(prev); m.set(sessionId, { running: true, content: '', toolActivities: [], startedAt: Date.now() }); return m
-        })
-        window.electronAPI.sendAgentMessage({ sessionId, userMessage: text, channelId, workspaceId: workspaceId ?? undefined }).catch(console.error)
-      }
-      return
-    }
-
     setMode('stopping'); setMessage('正在输出...')
     window.electronAPI.commitVoiceDictation({ text }).then(r => {
       cleanup(); setMode('completed'); setMessage(r.message)
+      // auto-send
+      if (shouldAutoSend(text, settingsRef.current?.autoSendEnabled ?? true, 'always')) {
+        if (store.get(appModeAtom) === 'agent') {
+          const channelId = store.get(agentChannelIdAtom)
+          const sessionId = store.get(currentAgentSessionIdAtom)
+          const workspaceId = store.get(currentAgentWorkspaceIdAtom)
+          if (sessionId && channelId) {
+            store.set(agentSessionDraftsAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
+            store.set(agentSessionDraftHtmlAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
+            store.set(liveMessagesMapAtom, (prev) => {
+              const m = new Map(prev); const existing = m.get(sessionId) ?? []
+              m.set(sessionId, [...existing, { type: 'user', message: { content: [{ type: 'text', text }] }, parent_tool_use_id: null, _createdAt: Date.now() } as unknown as SDKMessage])
+              return m
+            })
+            store.set(agentStreamingStatesAtom, (prev) => {
+              const m = new Map(prev); m.set(sessionId, { running: true, content: '', toolActivities: [], startedAt: Date.now() }); return m
+            })
+            window.electronAPI.sendAgentMessage({ sessionId, userMessage: text, channelId, workspaceId: workspaceId ?? undefined }).catch(console.error)
+          }
+        }
+      }
     }).catch(() => { cleanup(); setMode('error'); setMessage('输出失败') })
   }, [store])
 
