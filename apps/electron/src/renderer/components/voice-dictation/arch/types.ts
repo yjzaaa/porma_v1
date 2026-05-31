@@ -32,8 +32,8 @@ export type PanelState = 'stopped' | 'listening' | 'recording' | 'processing' | 
 export const VALID_TRANSITIONS: Record<PanelState, PanelState[]> = {
   stopped:    ['listening'],
   listening:  ['recording', 'stopped'],
-  recording:  ['processing', 'error'],
-  processing: ['completed', 'error'],
+  recording:  ['processing', 'error', 'stopped'],  // 允许紧急停止
+  processing: ['completed', 'error', 'stopped'],    // 允许紧急停止
   completed:  ['stopped'],
   error:      ['stopped'],
 }

@@ -72,8 +72,9 @@ export class AudioHub {
     this._running = true
   }
 
-  /** 停止麦克风采集 */
+  /** 停止麦克风采集（幂等） */
   stop(): void {
+    if (!this._running) return
     this._running = false
     this.proc?.disconnect(); this.proc = null
     this.ctx?.close().catch(() => {}); this.ctx = null
