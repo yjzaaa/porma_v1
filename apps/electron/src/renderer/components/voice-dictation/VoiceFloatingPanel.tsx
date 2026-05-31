@@ -122,7 +122,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
 
   // ---- ASR via Provider ----
   const beginASR = React.useCallback(async () => {
-    setTranscript(''); trRef.current = ''
+    setTranscript(''); trRef.current = ''; setMessage('')
     setMode('recording'); setMessage('正在监听...')
     recStartRef.current = performance.now()
     silenceRef.current = recStartRef.current
@@ -151,7 +151,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
     if (!text) { cleanup(); setMode('idle'); setMessage(''); return }
     setMode('stopping'); setMessage('正在输出...')
     window.electronAPI.commitVoiceDictation({ text }).then(r => {
-      setMode('completed'); setMessage(r.message); cleanup()
+      cleanup(); setMode('completed'); setMessage(r.message)
       // auto-send
       if (shouldAutoSend(text, settingsRef.current?.autoSendEnabled ?? true, 'always')) {
         if (store.get(appModeAtom) === 'agent') {
