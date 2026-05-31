@@ -9,7 +9,7 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from 'jotai'
 import { Loader2, Check } from 'lucide-react'
-import type { VoiceDictationCommitResult, VoiceDictationSettings } from '../../../types'
+import type { VoiceDictationSettings } from '../../../types'
 import { agentChannelIdAtom, currentAgentSessionIdAtom, currentAgentWorkspaceIdAtom, agentSessionDraftsAtom, agentSessionDraftHtmlAtom, liveMessagesMapAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
 import type { SDKMessage } from '@proma/shared'
@@ -33,6 +33,9 @@ export function VoiceFloatingPanel(): React.ReactElement {
   const settingsRef = React.useRef<VoiceDictationSettings | null>(null)
   const providerRef = React.useRef<ASRProvider | null>(null)
   const commitTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const recStartRef = React.useRef(0)
+  const silenceRef = React.useRef(0)
+  const stopRecRef = React.useRef<(() => Promise<void>) | null>(null)
 
   // ---- VAD-only AudioContext (idle mode volume bars) ----
   const vadRef = React.useRef<{
@@ -64,6 +67,19 @@ export function VoiceFloatingPanel(): React.ReactElement {
           const v = Math.max(-1, Math.min(1, inp[i] ?? 0))
           ring[ri] = v < 0 ? v * 0x8000 : v * 0x7fff
           ri = (ri + 1) % RS
+        }
+
+        // 录音 VAD 静音检测
+        if (mRef.current !== 'idle' && recStartRef.current > 0) {
+          const now = performance.now()
+          if (peak >= 0.01) { silenceRef.current = now }
+          else if (silenceRef.current > 0) {
+            const t = settingsRef.current?.vadStopTimeoutMs ?? 1800
+            const min = settingsRef.current?.vadMinRecordMs ?? 500
+            if (t > 0 && (now - silenceRef.current) >= t && (now - recStartRef.current) >= min) {
+              stopRecRef.current?.().catch(() => {})
+            }
+          }
         }
 
         // VAD trigger → start ASR
@@ -107,32 +123,26 @@ export function VoiceFloatingPanel(): React.ReactElement {
   const beginASR = React.useCallback(async () => {
     setTranscript(''); trRef.current = ''
     setMode('recording'); setMessage('正在监听...')
+    recStartRef.current = performance.now()
+    silenceRef.current = recStartRef.current
 
-    // get fresh settings
     let s: VoiceDictationSettings
     try { s = await window.electronAPI.getVoiceDictationSettings() } catch { setMode('error'); setMessage('无法加载设置'); return }
-    settingsRef.current = s
-    setSettings(s)
+    settingsRef.current = s; setSettings(s)
     if (!s.enabled) { setMessage('语音输入未启用'); return }
 
-    // create provider
     const provider = createASRProvider(s.engine || 'doubao')
     providerRef.current = provider
 
-    await provider.start({
-      onTranscript: (text: string, _isFinal: boolean) => {
-        setTranscript(text); trRef.current = text
-      },
-      onState: (_state: string, msg?: string) => { if (msg) setMessage(msg) },
-      onVolume: (p: number) => setVolume(p),
-      onEnd: (text: string) => {
-        // ASR naturally ended (Web Speech silence timeout)
-        if (text) {
-          finishRecording(text)
-        }
-      },
-      onError: (msg: string) => { setMessage(msg) },
-    })
+    try {
+      await provider.start({
+        onTranscript: (text: string) => { setTranscript(text); trRef.current = text },
+        onState: (_st: string, msg?: string) => { if (msg) setMessage(msg) },
+        onVolume: (p: number) => setVolume(p),
+        onEnd: (text: string) => { if (text) finishRecording(text) },
+        onError: (msg: string) => { setMessage(msg) },
+      })
+    } catch { setMode('error'); setMessage('识别引擎启动失败') }
   }, [])
 
   const finishRecording = React.useCallback((text: string) => {
@@ -175,6 +185,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
       }, 300)
     }
   }, [])
+  stopRecRef.current = stopRec
 
   const cancelRec = React.useCallback(() => {
     providerRef.current?.cancel().catch(() => {})
@@ -191,7 +202,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
   // ---- IPC: toggle stop (Ctrl+`) ----
   React.useEffect(() => {
     const cts = window.electronAPI.onVoiceDictationToggleStop(() => {
-      if (mRef.current === 'recording') stopRec().catch(() => {})
+      if (mRef.current === 'recording') stopRecRef.current?.().catch(() => {})
     })
     return () => { cts(); cleanup(); stopVAD() }
   }, [cleanup, stopVAD, stopRec])
