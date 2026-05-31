@@ -63,7 +63,13 @@ export class DoubaoProvider implements ASRProvider {
 
     this.cleanupListeners = () => unsubs.forEach(f => f())
 
-    // 先发历史缓冲（from VAD ring buffer）
+    // 先建立 ASR 会话（WebSocket 握手），再发送音频
+    callbacks.onState('connecting', '连接 ASR...')
+    await window.electronAPI.startVoiceDictation({ sessionId: sid })
+    if (this.sessionId !== sid) return
+    this.asrReady = true
+
+    // 发历史缓冲（会话就绪后）
     try {
       const buf = await window.electronAPI.getHandsfreeBuffer()
       if (buf && buf.byteLength > 0 && this.sessionId === sid) {
@@ -74,12 +80,6 @@ export class DoubaoProvider implements ASRProvider {
         }
       }
     } catch {}
-
-    // 启动 ASR 会话
-    callbacks.onState('connecting', '连接 ASR...')
-    await window.electronAPI.startVoiceDictation({ sessionId: sid })
-    if (this.sessionId !== sid) return
-    this.asrReady = true
 
     // 开始音频捕获
     await this.startCapture()
@@ -132,30 +132,18 @@ export class DoubaoProvider implements ASRProvider {
     this.stopping = true
     const sid = this.sessionId
 
-    // 清空剩余音频
-    const pending = this.pendingAudio; this.pendingAudio = []
-    if (sid) {
-      for (const c of pending) window.electronAPI.sendVoiceDictationAudio({ sessionId: sid, data: c }).catch(() => {})
-    }
-
-    // 停止捕获
+    // 先停止音频捕获（不再产生新 PCM）
     this.processor?.disconnect(); this.processor = null
     this.audioContext?.close().catch(() => {}); this.audioContext = null
     this.stream?.getTracks().forEach(t => t.stop()); this.stream = null
 
-    // 停止 ASR 会话
-    if (sid && this.asrReady) {
+    // 停止 ASR 会话（发送 last packet），无论 asrReady 状态
+    if (sid) {
       await window.electronAPI.stopVoiceDictation({ sessionId: sid }).catch(() => {})
     }
+    this.pendingAudio = []
 
-    // 等待最终文本（短暂延迟让 ASR 返回剩余结果）
-    const text = await new Promise<string>((resolve) => {
-      this.stopTimeout = setTimeout(() => {
-        resolve(this.transcriptText)
-      }, 500)
-    })
-
-    return text.trim()
+    return this.transcriptText.trim()
   }
 
   async cancel(): Promise<void> {

@@ -428,9 +428,8 @@ export async function stopDoubaoAsrSession(sessionId: string): Promise<void> {
 
   if (active.ws.readyState === WebSocket.OPEN) {
     active.ws.send(buildAudioFrame(Buffer.alloc(0), true))
-    setTimeout(() => {
-      if (!active.closed) active.ws.close()
-    }, 800)
+    active.closed = true
+    setTimeout(() => active.ws.close(), 800)
   } else {
     active.ws.terminate()
   }
