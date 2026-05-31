@@ -53,7 +53,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
       })
       const ctx = new ACTX()
       const src = ctx.createMediaStreamSource(stream)
-      const RS = 16000 * 1.5
+      const RS = 16000 * 3
       const ring = new Int16Array(RS)
       let ri = 0, cons = 0, last = 0
       const proc = ctx.createScriptProcessor(2048, 1, 1)
@@ -86,9 +86,9 @@ export function VoiceFloatingPanel(): React.ReactElement {
         // VAD trigger → start ASR
         if (mRef.current === 'idle') {
           const now = performance.now()
-          if (peak >= 0.03 && now - last > 3000) {
+          if (peak >= 0.02 && now - last > 2000) {
             cons++
-            if (cons >= 2) {
+            if (cons >= 1) {
               cons = 0; last = now
               mRef.current = 'recording'
 
