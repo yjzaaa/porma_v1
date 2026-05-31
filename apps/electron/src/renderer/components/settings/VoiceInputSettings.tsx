@@ -104,7 +104,7 @@ export function VoiceInputSettings(): React.ReactElement {
 
   const update = React.useCallback(async (updates: Partial<VoiceDictationSettings>) => {
     if (!settings) return
-    const optimistic = { ...settings, ...updates, provider: 'doubao' as const }
+    const optimistic = { ...settings, engine: settings.engine || 'webspeech', ...updates, provider: 'doubao' as const }
     setSettings(optimistic)
     setSaving(true)
     try {

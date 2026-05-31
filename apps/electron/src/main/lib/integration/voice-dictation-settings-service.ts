@@ -71,6 +71,7 @@ export function updateVoiceDictationSettings(
     accessToken: (updates.accessToken ?? current.accessToken ?? '').trim(),
     resourceId: (updates.resourceId ?? current.resourceId ?? '').trim(),
     provider: 'doubao',
+    engine: updates.engine ?? current.engine ?? 'webspeech',
   }
 
   updateSettings({

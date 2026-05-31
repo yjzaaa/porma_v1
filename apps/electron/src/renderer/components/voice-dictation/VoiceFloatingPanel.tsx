@@ -134,7 +134,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
     if (!s.enabled) { setMessage('语音输入未启用'); return }
     stopGuardRef.current = false
 
-    const provider = createASRProvider(s.engine || 'doubao')
+    const provider = createASRProvider(s.engine || 'webspeech')
     providerRef.current = provider
 
     try {
