@@ -13,7 +13,7 @@ import { useVoiceWindowLayout } from './use-voice-window-layout'
 
 const MAX_QUEUED_CHUNKS = 60
 const STOP_COMMIT_TIMEOUT_MS = 1400
-const FINAL_COMMIT_DELAY_MS = 180
+const FINAL_COMMIT_DELAY_MS = 500
 
 export function VoiceDictationApp(): React.ReactElement {
   const [sessionId, setSessionId] = React.useState<string | null>(null)
@@ -441,7 +441,7 @@ export function VoiceDictationApp(): React.ReactElement {
       transcriptMergeStateRef.current = mergedTranscript.state
       setTranscript(mergedTranscript.text)
       transcriptRef.current = mergedTranscript.text
-      if (stoppingRef.current && event.isFinal) {
+      if (event.isFinal) {
         scheduleCommit(FINAL_COMMIT_DELAY_MS)
       }
     })
