@@ -36,6 +36,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
   const recStartRef = React.useRef(0)
   const silenceRef = React.useRef(0)
   const stopRecRef = React.useRef<(() => Promise<void>) | null>(null)
+  const stopGuardRef = React.useRef(false)
 
   // ---- VAD-only AudioContext (idle mode volume bars) ----
   const vadRef = React.useRef<{
@@ -130,6 +131,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
     try { s = await window.electronAPI.getVoiceDictationSettings() } catch { setMode('error'); setMessage('无法加载设置'); return }
     settingsRef.current = s; setSettings(s)
     if (!s.enabled) { setMessage('语音输入未启用'); return }
+    stopGuardRef.current = false
 
     const provider = createASRProvider(s.engine || 'doubao')
     providerRef.current = provider
@@ -175,6 +177,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
   }, [store])
 
   const stopRec = React.useCallback(async () => {
+    if (stopGuardRef.current) return; stopGuardRef.current = true
     setMode('stopping'); setMessage('正在收尾...')
     const p = providerRef.current
     if (p) {
