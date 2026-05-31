@@ -1,15 +1,10 @@
 /**
- * 语音模块架构 — 共享类型
+ * 语音模块 — 面板与调度类型
  *
- * 核心设计原则：
- *   AudioHub 单例 → 订阅者模式 → VAD / Session 各自订阅 PCM
- *   StateMachine → 严格守卫 → 防止重复触发
- *   Session → 自包含 → 不泄漏 ref 到下一轮
+ * PanelState 状态机定义、PCM 帧类型、Session/UI 通信接口。
  */
 
 import type { VoiceDictationSettings } from '../../../../types'
-
-// ===== AudioHub =====
 
 /** PCM 帧（16-bit 单声道），由 AudioHub 广播 */
 export interface PcmFrame {
@@ -23,8 +18,6 @@ export interface PcmFrame {
 
 export type PcmSubscriber = (frame: PcmFrame) => void
 
-// ===== StateMachine =====
-
 /** 语音面板合法状态 */
 export type PanelState = 'stopped' | 'listening' | 'recording' | 'processing' | 'completed' | 'error'
 
@@ -32,11 +25,14 @@ export type PanelState = 'stopped' | 'listening' | 'recording' | 'processing' | 
 export const VALID_TRANSITIONS: Record<PanelState, PanelState[]> = {
   stopped:    ['listening'],
   listening:  ['recording', 'stopped'],
-  recording:  ['processing', 'error', 'stopped'],  // 允许紧急停止
-  processing: ['completed', 'error', 'stopped'],    // 允许紧急停止
+  recording:  ['processing', 'error', 'stopped'],
+  processing: ['completed', 'error', 'stopped'],
   completed:  ['stopped'],
   error:      ['stopped'],
 }
+
+/** 语音活动检测器状态 */
+export type DetectorState = 'inactive' | 'listening' | 'hearing' | 'activating'
 
 // ===== Session =====
 
@@ -55,7 +51,6 @@ export interface SessionCallbacks {
 
 // ===== Orchestrator =====
 
-/** 供 UI 消费的 ObservableState */
 export interface VoiceUIState {
   state: PanelState
   volume: number

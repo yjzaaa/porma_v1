@@ -16,7 +16,7 @@ import { previewPanelOpenMapAtom, previewSplitRatioAtom } from '@/atoms/preview-
 import { PreviewPanel } from '@/components/diff/PreviewPanel'
 import { TabBar } from './TabBar'
 import { TabContent } from './TabContent'
-import { VoiceFloatingPanel } from '@/components/voice-dictation/VoiceFloatingPanel'
+import { VoiceFloatingPanel } from '@/components/voice-dictation/ui/VoiceFloatingPanel'
 
 export function MainArea(): React.ReactElement {
   const tabs = useAtomValue(tabsAtom)

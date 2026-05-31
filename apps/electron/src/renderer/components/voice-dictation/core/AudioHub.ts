@@ -1,12 +1,12 @@
 /**
- * AudioHub — 麦克风单例管理器
+ * 语音模块 — AudioHub 麦克风单例管理器
  *
  * 整个应用只有一个 getUserMedia 调用。
  * VAD 和 Session 通过 subscribe() 接收 PCM 帧。
  * 启停控制由 Orchestrator 管理。
  */
 
-import type { PcmFrame, PcmSubscriber } from './types'
+import type { PcmFrame, PcmSubscriber } from '../types/panel'
 
 const ACTX = (window as any).AudioContext ?? (window as any).webkitAudioContext as typeof AudioContext | undefined
 
@@ -46,11 +46,9 @@ export class AudioHub {
       if (!self._running) return
       const input: Float32Array = ev.inputBuffer.getChannelData(0)
 
-      // 峰值
       let peak = 0
       for (let i = 0; i < input.length; i++) peak = Math.max(peak, Math.abs(input[i] ?? 0))
 
-      // 写入环形缓冲
       const pcm = new Int16Array(input.length)
       for (let i = 0; i < input.length; i++) {
         const s = Math.max(-1, Math.min(1, input[i] ?? 0))

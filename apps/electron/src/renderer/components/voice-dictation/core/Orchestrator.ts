@@ -1,5 +1,5 @@
 /**
- * Orchestrator — 语音模块总调度器
+ * 语音模块 — Orchestrator 总调度器
  *
  * 职责：
  *   1. 持有 AudioHub 单例
@@ -13,7 +13,7 @@
 import { AudioHub } from './AudioHub'
 import { StateMachine } from './StateMachine'
 import { Session } from './Session'
-import type { PcmFrame, PanelState, UIStateListener, VoiceUIState } from './types'
+import type { PcmFrame, PanelState, UIStateListener, VoiceUIState } from '../types/panel'
 import type { VoiceDictationSettings } from '../../../../types'
 
 export class Orchestrator {
@@ -71,7 +71,6 @@ export class Orchestrator {
       return
     }
 
-    // 订阅 VAD 检测
     this.unsubVAD = this.hub.subscribe((frame: PcmFrame) => {
       this.volume = frame.peak
       this.emit()
@@ -140,12 +139,10 @@ export class Orchestrator {
         this.message = result.commitMessage
         this.emit()
 
-        // auto-send
         if (result.text) {
           this.onAutoSend?.(result.text)
         }
 
-        // completed → stopped → listening
         this.fsm.transition('stopped')
         this.emit()
         setTimeout(() => {

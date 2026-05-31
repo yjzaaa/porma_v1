@@ -8,11 +8,11 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from 'jotai'
 import { Loader2, Check } from 'lucide-react'
-import { Orchestrator } from './arch/Orchestrator'
-import type { VoiceUIState } from './arch/types'
+import { Orchestrator } from '../core/Orchestrator'
+import type { VoiceUIState } from '../types/panel'
 import { agentChannelIdAtom, currentAgentSessionIdAtom, currentAgentWorkspaceIdAtom, agentSessionDraftsAtom, agentSessionDraftHtmlAtom, liveMessagesMapAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
-import { shouldAutoSend } from './voice-auto-send'
+import { shouldAutoSend } from '../utils/auto-send'
 import type { SDKMessage } from '@proma/shared'
 
 export function VoiceFloatingPanel(): React.ReactElement {
@@ -26,7 +26,6 @@ export function VoiceFloatingPanel(): React.ReactElement {
     const orch = new Orchestrator()
     orchRef.current = orch
 
-    // 注入 auto-send 回调
     orch.onAutoSend = (text: string) => {
       if (store.get(appModeAtom) !== 'agent') return
       const channelId = store.get(agentChannelIdAtom)

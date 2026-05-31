@@ -15,7 +15,8 @@ Proma 的语音输入功能通过 Electron 的 IPC（进程间通信）实现了
 ```mermaid
 graph TB
     subgraph Renderer["渲染进程 Renderer Process"]
-        VoiceApp["VoiceDictationApp.tsx<br/>语音浮窗 UI"]
+        VoiceApp["VoiceFloatingPanel.tsx<br/>语音浮窗 UI"]
+        Arch["arch/<br/>Orchestrator + Session + AudioHub"]
         PreloadVoice["Preload API<br/>(voice-dictation)"]
         GlobalShortcuts["GlobalShortcuts.tsx<br/>全局快捷键监听"]
     end
@@ -79,7 +80,7 @@ sequenceDiagram
     autonumber
     
     participant User as 用户
-    participant VoiceApp as VoiceDictationApp<br/>(语音浮窗)
+    participant VoiceApp as VoiceFloatingPanel<br/>(语音浮窗)
     participant PreloadVoice as Preload API<br/>(voice-dictation)
     participant IPCMain as IPC Main<br/>(misc-handlers.ts)
     participant ASRService as 豆包ASR服务<br/>(doubao-asr-service.ts)
@@ -108,7 +109,7 @@ sequenceDiagram
         IPCMain->>ASRService: sendDoubaoAsrAudio(sessionId, data)
         ASRService->>ASRService: buildAudioFrame(PCM, gzip压缩)
         ASRService-->>VoiceApp: onVoiceDictationTranscript({text, isFinal})
-        VoiceApp->>VoiceApp: mergeVoiceDictationTranscript()
+        VoiceApp->>VoiceApp: 识别文本更新
         VoiceApp->>User: 实时显示识别文本
     end
 
@@ -120,7 +121,7 @@ sequenceDiagram
     IPCMain->>ASRService: stopDoubaoAsrSession(sessionId)
     ASRService->>ASRService: 发送最后一帧(isLast: true)
     ASRService-->>VoiceApp: onVoiceDictationTranscript({text, isFinal: true})
-    VoiceApp->>VoiceApp: scheduleCommit(500ms)
+    VoiceApp->>VoiceApp: Session 自动完成
 
     Note over User,AgentService: 📝 阶段4：文本输出到输入框
 
@@ -169,44 +170,27 @@ sequenceDiagram
 
 ## 关键代码解析
 
-### 1. 音频处理与 VAD 并行执行
+### 1. Orchestrator 音频编排与 VAD
 
-**文件位置**: `apps/electron/src/renderer/components/voice-dictation/VoiceDictationApp.tsx:248-299`
+**文件位置**: `apps/electron/src/renderer/components/voice-dictation/core/Orchestrator.ts:62-83`
 
 ```typescript
-processor.onaudioprocess = (event) => {
-  const input = event.inputBuffer.getChannelData(0)
-  
-  // 1. 计算音量峰值
-  let peak = 0
-  for (let i = 0; i < input.length; i += 1) {
-    peak = Math.max(peak, Math.abs(input[i] ?? 0))
-  }
-  setVolume(Math.min(1, peak * 4))
+async enableHandsfree(): Promise<void> {
+  if (!this.fsm.transition('listening')) return
+  try { await this.hub.start() } catch { ... }
 
-  // 2. VAD静音检测（并行进行）
-  const VAD_THRESHOLD = 0.01
-  const now = Date.now()
-  if (peak >= VAD_THRESHOLD) {
-    silenceSinceRef.current = now  // 检测到语音，刷新时间戳
-  }
-  
-  // 3. 检查静音超时
-  if (timeoutMs > 0 && 
-      now - silenceSinceRef.current >= timeoutMs &&
-      now - recordingStartedAtRef.current >= minRecordMs) {
-    vadTimerRef.current = setTimeout(() => {
-      stopRecording().catch(() => {})
-    }, 0)
-  }
-
-  // 4. PCM转换和发送（继续执行，不阻塞VAD）
-  const pcm = floatTo16BitPcm(input, audioContext.sampleRate)
-  sendAudioChunk(sessionIdRef.current, pcm)
+  this.unsubVAD = this.hub.subscribe((frame: PcmFrame) => {
+    this.volume = frame.peak
+    this.emit()
+    this.detectSpeech(frame)
+  })
 }
 ```
 
-**作用**: 在同一个音频处理回调中并行执行 VAD 检测和音频发送，互不阻塞。
+VoicedDictationApp 旧版单体中的音频采集 + VAD 内联逻辑，已被重构为独立的 OO 架构：
+- **AudioHub**: 麦克风单例，PCM 帧广播给所有订阅者
+- **StateMachine**: 严格守卫状态转换，阻止竞态
+- **Session**: 每次录音独立的生命周期管理
 
 ### 2. 文本输出的智能路由
 
@@ -243,49 +227,27 @@ export async function commitVoiceDictationText(
 
 **作用**: 根据用户设置智能选择文本插入位置，优先写入 Proma 输入框以触发自动发送。
 
-### 3. 自动发送的无缝集成
+### 3. 自动发送的无缝集成（挂载点）
 
-**文件位置**: `apps/electron/src/renderer/components/shortcuts/GlobalShortcuts.tsx:61-124`
+**文件位置**: `apps/electron/src/renderer/components/voice-dictation/ui/VoiceFloatingPanel.tsx:30-48`
 
 ```typescript
-function tryAutoSendAgent(store, text, voiceSettings) {
-  // 1. 判断是否自动发送
-  if (!shouldAutoSend(text, voiceSettings?.autoSendEnabled ?? true, 'always')) return
+orch.onAutoSend = (text: string) => {
+  if (store.get(appModeAtom) !== 'agent') return
+  const channelId = store.get(agentChannelIdAtom)
+  const sessionId = store.get(currentAgentSessionIdAtom)
+  if (!sessionId || !channelId) return
 
-  // 2. 清除草稿（立即反馈）
-  store.set(agentSessionDraftsAtom, (prev) => {
-    const map = new Map(prev)
-    map.delete(sessionId)
-    return map
-  })
+  // 清除草稿、设置流式状态、乐观插入用户消息
+  store.set(agentSessionDraftsAtom, (prev) => { ... })
+  store.set(agentStreamingStatesAtom, (prev) => { ... })
+  store.set(liveMessagesMapAtom, (prev) => { ... })
 
-  // 3. 设置流式状态（与手动发送一致）
-  store.set(agentStreamingStatesAtom, (prev) => {
-    const map = new Map(prev)
-    map.set(sessionId, { running: true, content: '', startedAt: Date.now() })
-    return map
-  })
-
-  // 4. 乐观插入用户消息（UI立即显示）
-  store.set(liveMessagesMapAtom, (prev) => {
-    const existing = map.get(sessionId) ?? []
-    return [...existing, {
-      type: 'user',
-      message: { content: [{ type: 'text', text }] },
-      _createdAt: Date.now(),
-    }]
-  })
-
-  // 5. 立即通过IPC发送给主进程
-  window.electronAPI.sendAgentMessage({
-    sessionId, userMessage: text, channelId, workspaceId,
-  }).catch((error) => {
-    console.error('[语音自动发送] 发送失败:', error)
-  })
+  window.electronAPI.sendAgentMessage({ sessionId, userMessage: text, channelId, ... })
 }
 ```
 
-**作用**: 自动发送流程与手动发送完全一致，用户体验无缝。
+自动发送回调在 `VoiceFloatingPanel` 中注册到 `Orchestrator.onAutoSend`，GlobalShortcuts 仅负责辅助路径（外部写入光标）的自动发送。
 
 ## 数据流向
 
@@ -306,7 +268,7 @@ WebSocket 上传
     ↓
 IPC 推送 (voice-dictation:transcript)
     ↓
-文本合并 (voice-transcript-merge)
+识别文本更新
     ↓
 VAD 自动停止 (静音 ≥ 1.8s)
     ↓
@@ -401,10 +363,10 @@ for (const key of Object.keys(process.env)) {
 
 | 功能模块 | 文件路径 | 说明 |
 |---------|---------|------|
-| 语音浮窗 UI | `apps/electron/src/renderer/components/voice-dictation/VoiceDictationApp.tsx` | 语音输入主界面 |
+| 语音浮窗 UI | `apps/electron/src/renderer/components/voice-dictation/ui/VoiceFloatingPanel.tsx` + `core/` | OO 架构语音浮窗（Orchestrator + AudioHub + StateMachine + Session）|
 | 豆包 ASR 服务 | `apps/electron/src/main/lib/integration/doubao-asr-service.ts` | WebSocket 连接和协议处理 |
 | 文本输出服务 | `apps/electron/src/main/lib/text/text-output-service.ts` | 文本插入路由逻辑 |
-| 自动发送判断 | `apps/electron/src/renderer/components/voice-dictation/voice-auto-send.ts` | 文本完整性判断 |
+| 自动发送判断 | `apps/electron/src/renderer/components/voice-dictation/utils/auto-send.ts` | 文本完整性判断 |
 | 全局快捷键 | `apps/electron/src/renderer/components/shortcuts/GlobalShortcuts.tsx` | IPC 事件监听和自动发送 |
 | IPC 处理器 | `apps/electron/src/main/ipc/misc-handlers.ts` | 语音输入 IPC 通道注册 |
 | Agent 服务 | `apps/electron/src/main/lib/agent/agent-service.ts` | Agent 执行和流式返回 |

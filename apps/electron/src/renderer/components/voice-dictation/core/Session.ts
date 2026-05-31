@@ -1,17 +1,17 @@
 /**
- * Session — 封装一次完整的语音录制会话
+ * 语音模块 — Session 录音会话
  *
  * 生命周期：创建 → start() → 转写中 → stop() → complete → dispose
  * 每轮录音都是一个独立的 Session 实例，不跨轮泄漏状态。
  */
 
-import type { PcmFrame } from './types'
-import type { SessionCallbacks, SessionResult } from './types'
+import type { PcmFrame } from '../types/panel'
+import type { SessionCallbacks, SessionResult } from '../types/panel'
 import type { AudioHub } from './AudioHub'
-import { createASRProvider } from '../asr-factory'
-import type { ASRProvider } from '../asr-types'
+import { createASRProvider } from '../asr/factory'
+import type { ASRProvider } from '../types/asr'
 import type { VoiceDictationSettings } from '../../../../types'
-import { CHUNK_BYTES, concatAudioBuffers, splitChunk } from '../voice-audio-utils'
+import { CHUNK_BYTES, concatAudioBuffers, splitChunk } from '../utils/pcm'
 
 export class Session {
   private provider: ASRProvider | null = null
@@ -40,7 +40,6 @@ export class Session {
       if (this._disposed) return
       this.callbacks.onVolume(frame.peak)
 
-      // 静音检测
       const now = performance.now()
       if (frame.peak >= 0.01) {
         this.silenceSince = now
@@ -56,7 +55,6 @@ export class Session {
     this.recordingStartedAt = performance.now()
     this.silenceSince = this.recordingStartedAt
 
-    // 创建 ASR engine
     const engine = this.settings.engine || 'doubao'
     this.provider = createASRProvider(engine)
 
@@ -103,12 +101,9 @@ export class Session {
       return
     }
 
-    // commit + auto-send
     window.electronAPI.commitVoiceDictation({ text }).then(r => {
       this.commitMessage = r.message
       this.callbacks.onComplete({ text, commitMessage: r.message })
-
-      // auto-send
     }).catch(err => {
       console.error('[Session] commit 失败:', err)
       this.callbacks.onError('输出失败')

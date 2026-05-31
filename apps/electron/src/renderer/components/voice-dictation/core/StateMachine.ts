@@ -1,12 +1,12 @@
 /**
- * StateMachine — 语音面板有限状态机
+ * 语音模块 — StateMachine 有限状态机
  *
  * 严格守卫每个状态转换，拒绝非法跳转。
  * 配合 VALID_TRANSITIONS 表，阻止重复触发等竞态 bug。
  */
 
-import type { PanelState } from './types'
-import { VALID_TRANSITIONS } from './types'
+import type { PanelState } from '../types/panel'
+import { VALID_TRANSITIONS } from '../types/panel'
 
 export type StateListener = (from: PanelState, to: PanelState) => void
 
@@ -19,7 +19,7 @@ export class StateMachine {
   /** 尝试转换，返回是否成功 */
   transition(to: PanelState): boolean {
     const from = this._state
-    if (from === to) return true // 幂等
+    if (from === to) return true
     const allowed = VALID_TRANSITIONS[from]
     if (!allowed?.includes(to)) {
       console.warn(`[StateMachine] 非法转换: ${from} → ${to}（允许: ${allowed?.join(', ') ?? '无'}）`)

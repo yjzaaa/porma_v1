@@ -1,5 +1,5 @@
 /**
- * 语音输入自动发送 — 本地快速路径判断
+ * 语音模块 — 自动发送判断
  *
  * 方案一（默认）：移除启发式判断，直接自动发送
  * 方案二（预留）：基于启发式规则判断文本完整性
@@ -38,33 +38,20 @@ export function shouldAutoSend(
   const trimmed = text.trim()
   if (!trimmed) return false
 
-  // 如果用户禁用了自动发送，返回 false
   if (!enabled) return false
 
-  // 方案一：直接自动发送（默认）
   if (mode === 'always') {
     return trimmed.length >= MIN_AUTO_SEND_LENGTH
   }
 
-  // 方案二：启发式规则判断（预留）
   if (mode === 'smart') {
-    // 文本过短，不自动发送
     if (trimmed.length < MIN_AUTO_SEND_LENGTH) return false
-
-    // 句末标点结尾 → 完整指令
     if (SENTENCE_END_PUNCTUATION.test(trimmed)) return true
-
-    // 以模糊/试探性词结尾 → 不完整
     if (INCOMPLETE_ENDINGS.test(trimmed)) return false
-
-    // 文本较长（>20 字符）且不含模糊结尾 → 大概率完整
     if (trimmed.length > 20) return true
-
-    // 其他情况保守不发送
     return false
   }
 
-  // 方案三：AI 模型判断（预留，未来可接入）
   if (mode === 'ai') {
     // TODO: 调用 AI 模型判断
     return trimmed.length >= MIN_AUTO_SEND_LENGTH

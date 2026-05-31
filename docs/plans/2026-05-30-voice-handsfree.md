@@ -53,7 +53,7 @@ Feature: VAD 自动停止
 
 | 文件 | 说明 |
 |------|------|
-| `VoiceDictationApp.tsx` | VAD 核心实现在 `onaudioprocess` 回调中（详见下方代码文档）|
+| `arch/` (Orchestrator + Session + AudioHub) | VAD 核心实现在 `Orchestrator.detectSpeech()` 中 |
 | `voice-dictation-settings-service.ts` | `vadStopTimeoutMs`（默认 1800）/ `vadMinRecordMs`（默认 500） |
 
 **设计参数**:
@@ -164,16 +164,15 @@ Feature: 免提语音活动检测
 **放弃所有文本识别方案**（Porcupine / SpeechRecognition API），采用纯能量检波：
 
 ```typescript
-// voice-activity-detector.ts — 核心逻辑
-const detector = new VoiceActivityDetector({
-  threshold: 0.03,     // 语音能量阈值（高于 Phase 1 VAD 的 0.01）
-  durationMs: 800,     // 连续语音持续多久后触发
-  cooldownMs: 3000,    // 触发后冷却时间
-  onActivate: () => toggleVoiceDictation(),
+// Orchestrator.detectSpeech() — 核心逻辑（内置 VAD）
+this.hub.subscribe((frame: PcmFrame) => {
+  if (frame.peak >= 0.02 && (now - this.lastTrigger) > 2000) {
+    this.consecutiveFrames++
+    if (this.consecutiveFrames >= 1) {
+      this.startSession()
+    }
+  }
 })
-detector.start()
-// ...
-detector.stop()
 ```
 
 ### 设计决策
@@ -192,8 +191,10 @@ detector.stop()
 
 | 文件 | 作用 |
 |------|------|
-| [voice-activity-detector.ts](../../code/renderer/components/voice-dictation/voice-activity-detector.md) | 能量检波检测类 |
-| [GlobalShortcuts.tsx](../../code/renderer/components/shortcuts/GlobalShortcuts.md) | 免提模式生命周期管理 |
+| [core/Orchestrator.ts](../../../apps/electron/src/renderer/components/voice-dictation/core/Orchestrator.ts) | 内置 VAD + AudioHub 调度 |
+| [core/AudioHub.ts](../../../apps/electron/src/renderer/components/voice-dictation/core/AudioHub.ts) | 麦克风单例管理 |
+| [core/StateMachine.ts](../../../apps/electron/src/renderer/components/voice-dictation/core/StateMachine.ts) | 免提状态转换守卫 |
+| [ui/VoiceFloatingPanel.tsx](../../../apps/electron/src/renderer/components/voice-dictation/ui/VoiceFloatingPanel.tsx) | React 浮窗 UI |
 | [VoiceInputSettings.tsx] | 设置页面开关 |
 | [VoiceDictationSettings 类型] | `handsfreeEnabled` 字段 |
 
@@ -312,9 +313,9 @@ Feature: 免提模式
 
 | Phase | 交付物 | 状态 | 采用方案 |
 |-------|--------|------|---------|
-| 1 | VAD 自动停止 | ✅ 已完成 | `VoiceDictationApp.tsx` 内静音检测 |
+| 1 | VAD 自动停止 | ✅ 已完成 | `arch/Orchestrator.detectSpeech()` 状态机守卫 |
 | 2 | 语义自动发送 | ✅ 已完成（always） | `voice-auto-send.ts` + `GlobalShortcuts.tsx` |
-| 3 | 免提语音活动检测 | ✅ 已完成 | `VoiceActivityDetector` 基于 Web Audio API 能量检波，`handsfreeEnabled` 设置控制 |
+| 3 | 免提语音活动检测 | ✅ 已完成 | `arch/` OO 架构（AudioHub + StateMachine + Orchestrator.detectSpeech），`handsfreeEnabled` 设置控制 |
 | 4 | 语音命令 | 🔲 未开始 | 本地正则匹配（需兜底机制）|
 | 5 | 免提模式 | 🔲 未开始 | 状态机 + 音频反馈 |
 
@@ -324,12 +325,10 @@ Feature: 免提模式
 
 | 主题 | 文档 | 内容 |
 |------|------|------|
-| VAD 实现详解 | [VoiceDictationApp.md](../code/renderer/components/voice-dictation/VoiceDictationApp.md) | 架构图、VAD 流程、核心代码解析 |
-| 唤醒词检测 | [wake-word-light.md](../code/renderer/components/voice-dictation/wake-word-light.md) | SpeechRecognition API 封装、生命周期 |
+| VAD 实现详解 | [VoiceFloatingPanel + arch/](./VoiceFloatingPanel.md) | OO 架构图、FSM 状态机、AudioHub 调度 |
 | 自动发送判断 | [voice-auto-send.md](../code/renderer/components/voice-dictation/voice-auto-send.md) | always/smart/ai 三种模式 |
 | 自动发送触发 | [GlobalShortcuts.md](../code/renderer/components/shortcuts/GlobalShortcuts.md) | 乐观更新、提交流程图 |
 | 文本输出路由 | [text-output-service.md](../code/main/lib/text/text-output-service.md) | 输出模式、IPC 通道 |
-| 文本合并状态机 | [voice-transcript-merge.md](../code/renderer/components/voice-dictation/voice-transcript-merge.md) | ASR 增量文本去重 |
 | 豆包 ASR 服务 | [Integration README](../code/main/lib/integration/README.md) | WebSocket 协议、音频帧格式 |
 | 完整 IPC 时序 | [arch/10-voice-dictation-ipc.md](../arch/10-voice-dictation-ipc.md) | 跨进程调用链、IRL 序列图 |
 

@@ -32,10 +32,8 @@ docs/
 |------|---------|
 | [code/main/lib/README.md](code/main/lib/README.md) | 主进程 30 个业务模块分类导航 |
 | [code/main/lib/text/text-output-service.md](code/main/lib/text/text-output-service.md) | 文本输出路由（Proma 输入框 / 光标 / 剪贴板）|
-| [code/renderer/components/voice-dictation/VoiceDictationApp.md](code/renderer/components/voice-dictation/VoiceDictationApp.md) | 语音输入浮窗组件详细文档 |
+| [code/renderer/components/voice-dictation/VoiceFloatingPanel.md](code/renderer/components/voice-dictation/VoiceFloatingPanel.md) | 语音输入浮窗组件（OO 架构）|
 | [code/renderer/components/voice-dictation/voice-auto-send.md](code/renderer/components/voice-dictation/voice-auto-send.md) | 自动发送判断逻辑（三种模式）|
-| [code/renderer/components/voice-dictation/voice-transcript-merge.md](code/renderer/components/voice-dictation/voice-transcript-merge.md) | ASR 增量文本合并状态机 |
-| [code/renderer/components/voice-dictation/voice-activity-detector.md](code/renderer/components/voice-dictation/voice-activity-detector.md) | 免提模式语音活动检测（Web Audio API 能量检波）|
 | [code/renderer/components/shortcuts/GlobalShortcuts.md](code/renderer/components/shortcuts/GlobalShortcuts.md) | 全局快捷键 + 自动发送乐观更新 |
 
 ### 模块深度文档 (`modules/`)

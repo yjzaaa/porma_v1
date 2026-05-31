@@ -1,5 +1,5 @@
 /**
- * 语音输入音频工具
+ * 语音模块 — PCM 音频工具
  */
 
 export const TARGET_SAMPLE_RATE = 16000

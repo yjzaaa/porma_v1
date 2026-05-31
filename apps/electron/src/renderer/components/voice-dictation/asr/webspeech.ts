@@ -1,11 +1,11 @@
 /**
- * Web Speech API ASR Provider
+ * 语音模块 — Web Speech API ASR Provider
  *
  * 浏览器内置 SpeechRecognition，零 IPC、零 API Key。
  * Electron 中依赖 Chrome 的 webkitSpeechRecognition。
  */
 
-import type { ASRProvider, ASRCallbacks } from './asr-types'
+import type { ASRProvider, ASRCallbacks } from '../types/asr'
 
 // Web Speech API type shim
 interface SpeechRecognition_ {

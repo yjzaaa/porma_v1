@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "dev:electron (bun run)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/electron",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev:electron"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "dev:vite (bun run)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/electron",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev:vite"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "dev (bun run - all)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/electron",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    }
+  ]
+}

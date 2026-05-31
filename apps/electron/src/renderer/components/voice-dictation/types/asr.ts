@@ -1,12 +1,9 @@
 /**
- * ASR Provider 接口
+ * 语音模块 — ASR Provider 类型
  *
- * 抽象的语音识别引擎，可切换实现：
- * - doubao: 豆包 ASR（当前实现，走 IPC + 主进程）
- * - webspeech: 浏览器原生 SpeechRecognition（零额外成本）
- *
- * VoiceFloatingPanel 通过 createASRProvider 工厂获取实例，
- * 不直接依赖具体实现。
+ * 抽象的语音识别引擎接口，可切换实现：
+ * - doubao: 豆包 ASR（走 IPC + 主进程）
+ * - webspeech: 浏览器原生 SpeechRecognition
  */
 
 /** ASR Provider 状态回调 */

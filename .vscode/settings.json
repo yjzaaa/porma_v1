@@ -1,0 +1,6 @@
+{
+  "npm.packageManager": "bun",
+  "terminal.integrated.env.windows": {
+    "PATH": "C:\\Users\\Administrator\\.bun\\bin;${env:PATH}"
+  }
+}

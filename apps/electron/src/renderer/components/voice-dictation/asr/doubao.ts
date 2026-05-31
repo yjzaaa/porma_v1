@@ -1,13 +1,13 @@
 /**
- * Doubao ASR Provider
+ * 语音模块 — 豆包 ASR Provider
  *
  * 封装豆包 ASR 的 IPC 通信，复用已有的主进程链路。
  * 需要 getUserMedia 采集 PCM 通过 IPC 发送。
  */
 
-import type { ASRProvider, ASRCallbacks } from './asr-types'
-import type { VoiceDictationSettings, VoiceDictationStateEvent, VoiceDictationTranscriptEvent } from '../../../types'
-import { CHUNK_BYTES, concatAudioBuffers, floatTo16BitPcm, splitChunk } from './voice-audio-utils'
+import type { ASRProvider, ASRCallbacks } from '../types/asr'
+import type { VoiceDictationSettings, VoiceDictationStateEvent, VoiceDictationTranscriptEvent } from '../../../../types'
+import { CHUNK_BYTES, concatAudioBuffers, floatTo16BitPcm, splitChunk } from '../utils/pcm'
 
 const ACTX = (window as any).AudioContext ?? (window as any).webkitAudioContext as typeof AudioContext | undefined
 
@@ -34,7 +34,6 @@ export class DoubaoProvider implements ASRProvider {
     this.queuedAudio = []
     this.transcriptText = ''
 
-    // 检查麦克风权限
     const perm = await window.electronAPI.checkMicrophonePermission()
     if (perm.status === 'denied') { callbacks.onError?.('麦克风权限被阻止'); return }
     if (perm.status === 'not-determined') {
@@ -45,7 +44,6 @@ export class DoubaoProvider implements ASRProvider {
     const sid = crypto.randomUUID()
     this.sessionId = sid
 
-    // 订阅 IPC 事件
     const unsubs: Array<() => void> = []
 
     const ct = window.electronAPI.onVoiceDictationTranscript((e: VoiceDictationTranscriptEvent) => {
@@ -63,13 +61,11 @@ export class DoubaoProvider implements ASRProvider {
 
     this.cleanupListeners = () => unsubs.forEach(f => f())
 
-    // 先建立 ASR 会话（WebSocket 握手），再发送音频
     callbacks.onState('connecting', '连接 ASR...')
     await window.electronAPI.startVoiceDictation({ sessionId: sid })
     if (this.sessionId !== sid) return
     this.asrReady = true
 
-    // 发历史缓冲（会话就绪后）
     try {
       const buf = await window.electronAPI.getHandsfreeBuffer()
       if (buf && buf.byteLength > 0 && this.sessionId === sid) {
@@ -81,7 +77,6 @@ export class DoubaoProvider implements ASRProvider {
       }
     } catch {}
 
-    // 开始音频捕获
     await this.startCapture()
   }
 
@@ -123,7 +118,7 @@ export class DoubaoProvider implements ASRProvider {
 
       src.connect(proc); proc.connect(ac.destination)
       if (ac.state === 'suspended') await ac.resume()
-    } catch (err) {
+    } catch {
       this.callbacks?.onError?.('麦克风启动失败')
     }
   }
@@ -132,12 +127,10 @@ export class DoubaoProvider implements ASRProvider {
     this.stopping = true
     const sid = this.sessionId
 
-    // 先停止音频捕获（不再产生新 PCM）
     this.processor?.disconnect(); this.processor = null
     this.audioContext?.close().catch(() => {}); this.audioContext = null
     this.stream?.getTracks().forEach(t => t.stop()); this.stream = null
 
-    // 停止 ASR 会话（发送 last packet），无论 asrReady 状态
     if (sid) {
       await window.electronAPI.stopVoiceDictation({ sessionId: sid }).catch(() => {})
     }

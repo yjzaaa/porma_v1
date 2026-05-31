@@ -56,7 +56,7 @@ import {
   updateShortcutOverrides,
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
-import { shouldAutoSend } from '@/components/voice-dictation/voice-auto-send'
+import { shouldAutoSend } from '@/components/voice-dictation/utils/auto-send'
 
 /** 语音自动发送：判断文本完整性后直接发送到 Agent，成功后清除草稿 */
 function tryAutoSendAgent(
