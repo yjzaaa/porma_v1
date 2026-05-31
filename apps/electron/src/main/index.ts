@@ -457,9 +457,8 @@ async function bootstrap(): Promise<void> {
 
   // 预创建快速任务窗口（隐藏状态，首次唤起秒开）
   safeRun('createQuickTaskWindow', createQuickTaskWindow)
-  if (getSettings().voiceDictation?.enabled === true) {
-    safeRun('createVoiceDictationWindow', createVoiceDictationWindow)
-  }
+  // VoiceFloatingPanel handles voice detection inline — no separate window needed
+  // if (getSettings().voiceDictation?.enabled === true) { safeRun('createVoiceDictationWindow', createVoiceDictationWindow) }
 
   // 飞书实时同步开启时，默认阻止系统自动休眠，保证远程群内继续可用。
   safeRun('syncFeishuSyncSleepBlocker', () => syncFeishuSyncSleepBlocker(getSettings()))

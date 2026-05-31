@@ -5,14 +5,21 @@
 
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { useStore } from 'jotai'
 import { Loader2, Check } from 'lucide-react'
 import { CHUNK_BYTES, concatAudioBuffers, floatTo16BitPcm, splitChunk } from './voice-audio-utils'
 import type { VoiceDictationCommitResult, VoiceDictationSettings, VoiceDictationStateEvent, VoiceDictationTranscriptEvent } from '../../../types'
+import { agentChannelIdAtom, currentAgentSessionIdAtom, currentAgentWorkspaceIdAtom, agentSessionDraftsAtom, agentSessionDraftHtmlAtom, liveMessagesMapAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
+import { appModeAtom } from '@/atoms/app-mode'
+import type { SDKMessage } from '@proma/shared'
+
+import { shouldAutoSend } from './voice-auto-send'
 
 const ACTX = (window as any).AudioContext ?? (window as any).webkitAudioContext as typeof AudioContext | undefined
 type Mode = 'idle' | 'recording' | 'stopping' | 'completed' | 'error'
 
 export function VoiceFloatingPanel(): React.ReactElement {
+  const store = useStore()
   const [mode, setMode] = React.useState<Mode>('idle')
   const [volume, setVolume] = React.useState(0)
   const [transcript, setTranscript] = React.useState('')
@@ -45,7 +52,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
       const cap = { s, c, r: new Int16Array(RS), ri: 0, cons: 0, last: 0 }
       capRef.current = cap
       const p = c.createScriptProcessor(2048, 1, 1)
-      p.onaudioprocess = (ev) => {
+      p.onaudioprocess = (ev: any) => {
         if (!capRef.current) return
         const inp = ev.inputBuffer.getChannelData(0)
         let peak = 0
@@ -129,6 +136,40 @@ export function VoiceFloatingPanel(): React.ReactElement {
     for (const c of cs) window.electronAPI.sendVoiceDictationAudio({ sessionId: sid, data: c }).catch(() => {})
   }, [])
 
+  /** 自动发送语音文本到 Agent 会话 */
+  const tryAutoSend = React.useCallback((text: string) => {
+    if (!shouldAutoSend(text, setRef.current?.autoSendEnabled ?? true, 'always')) return
+    if (store.get(appModeAtom) !== 'agent') return
+    const channelId = store.get(agentChannelIdAtom)
+    const sessionId = store.get(currentAgentSessionIdAtom)
+    const workspaceId = store.get(currentAgentWorkspaceIdAtom)
+    if (!sessionId || !channelId) return
+
+    // 清除草稿，乐观插入用户消息
+    store.set(agentSessionDraftsAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
+    store.set(agentSessionDraftHtmlAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
+    store.set(liveMessagesMapAtom, (prev) => {
+      const m = new Map(prev)
+      const existing = m.get(sessionId) ?? []
+      m.set(sessionId, [...existing, {
+        type: 'user',
+        message: { content: [{ type: 'text', text }] },
+        parent_tool_use_id: null,
+        _createdAt: Date.now(),
+      } as unknown as SDKMessage])
+      return m
+    })
+    store.set(agentStreamingStatesAtom, (prev) => {
+      const m = new Map(prev)
+      m.set(sessionId, { running: true, content: '', toolActivities: [], startedAt: Date.now() })
+      return m
+    })
+    window.electronAPI.sendAgentMessage({
+      sessionId, userMessage: text, channelId,
+      workspaceId: workspaceId ?? undefined,
+    }).catch(console.error)
+  }, [store])
+
   const stopRec = React.useCallback(async () => {
     if (stopRef.current) return; stopRef.current = true
     const sid = sidRef.current; setMode('stopping'); setMessage('正在收尾...')
@@ -139,9 +180,12 @@ export function VoiceFloatingPanel(): React.ReactElement {
       const text = trRef.current.trim()
       if (!text) { cleanup(); setMode('idle'); setMessage(''); return }
       setMode('stopping'); setMessage('正在输出...')
-      window.electronAPI.commitVoiceDictation({ text }).then(r => { setMode('completed'); setMessage(r.message); setCr(r); cleanup() }).catch(() => { commitRef.current = false; setMode('error'); setMessage('输出失败') })
+      window.electronAPI.commitVoiceDictation({ text }).then(r => {
+        setMode('completed'); setMessage(r.message); setCr(r); cleanup()
+        tryAutoSend(text)
+      }).catch(() => { cleanup(); setMode('error'); setMessage('输出失败') })
     }, 1400)
-  }, [flushQ])
+  }, [flushQ, tryAutoSend])
 
   const cleanup = React.useCallback(() => {
     if (sidRef.current) { window.electronAPI.cancelVoiceDictation({ sessionId: sidRef.current }).catch(() => {}); sidRef.current = null }
