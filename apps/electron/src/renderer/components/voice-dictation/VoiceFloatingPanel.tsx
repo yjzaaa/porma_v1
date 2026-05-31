@@ -134,7 +134,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
     if (!s.enabled) { setMessage('语音输入未启用'); return }
     stopGuardRef.current = false
 
-    const provider = createASRProvider(s.engine || 'webspeech')
+    const provider = createASRProvider(s.engine || 'doubao')
     providerRef.current = provider
 
     try {
@@ -228,7 +228,17 @@ export function VoiceFloatingPanel(): React.ReactElement {
   // ---- VAD lifecycle ----
   React.useEffect(() => {
     if (settings?.handsfreeEnabled && mode === 'idle') { startVAD().catch(() => {}) }
-    else if (!settings?.handsfreeEnabled) { stopVAD() }
+    else if (!settings?.handsfreeEnabled) {
+      stopVAD()
+      // 关闭免提时同时取消正在进行中的录音
+      if (providerRef.current) {
+        providerRef.current.cancel().catch(() => {})
+        providerRef.current.dispose()
+        providerRef.current = null
+      }
+      stopGuardRef.current = false
+      if (mode !== 'idle') { setMode('idle'); setMessage(''); setTranscript(''); trRef.current = '' }
+    }
   }, [settings?.handsfreeEnabled, mode, startVAD, stopVAD])
 
   // ---- auto-retract ----
@@ -245,7 +255,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
 
   return createPortal(
     <div className="fixed bottom-4 right-4 z-[9999]">
-      <div className={isIdle ? '' : 'hidden'}>
+      <div className={isIdle && enabled ? '' : 'hidden'}>
         <div className="flex items-center justify-center rounded-xl border px-2.5 py-2 shadow-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700">
           <div className="flex items-end gap-[3px] h-[14px]">
             {[0.4, 0.7, 0.5, 0.9, 0.6].map((s, i) => (
