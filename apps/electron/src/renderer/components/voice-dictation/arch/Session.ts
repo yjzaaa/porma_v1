@@ -12,7 +12,6 @@ import { createASRProvider } from '../asr-factory'
 import type { ASRProvider } from '../asr-types'
 import type { VoiceDictationSettings } from '../../../../types'
 import { CHUNK_BYTES, concatAudioBuffers, splitChunk } from '../voice-audio-utils'
-import { shouldAutoSend } from '../voice-auto-send'
 
 export class Session {
   private provider: ASRProvider | null = null
@@ -110,21 +109,10 @@ export class Session {
       this.callbacks.onComplete({ text, commitMessage: r.message })
 
       // auto-send
-      if (shouldAutoSend(text, this.settings.autoSendEnabled ?? true, 'always')) {
-        this.tryAutoSend(text)
-      }
     }).catch(err => {
       console.error('[Session] commit 失败:', err)
       this.callbacks.onError('输出失败')
     })
-  }
-
-  private tryAutoSend(text: string): void {
-    // 通过 CustomEvent 委托给 GlobalShortcuts 的发送逻辑
-    window.dispatchEvent(new CustomEvent('proma:insert-voice-dictation-text', {
-      cancelable: true,
-      detail: { text },
-    }))
   }
 
   /** 取消录音 */

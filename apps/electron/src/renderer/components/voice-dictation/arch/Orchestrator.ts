@@ -24,6 +24,9 @@ export class Orchestrator {
   private uiListeners = new Set<UIStateListener>()
   private unsubVAD: (() => void) | null = null
 
+  /** 由 React 层注入的自动发送回调 */
+  onAutoSend: ((text: string) => void) | null = null
+
   // UI state
   private volume = 0
   private transcript = ''
@@ -134,20 +137,24 @@ export class Orchestrator {
       onMetadata: (m: string) => { this.message = m; this.emit() },
       onComplete: (result) => {
         this.session = null
-        this.fsm.transition(result.text ? 'processing' : 'stopped')
         this.message = result.commitMessage
         this.emit()
+
+        // auto-send
+        if (result.text) {
+          this.onAutoSend?.(result.text)
+        }
+
+        // completed → stopped → listening
+        this.fsm.transition('stopped')
+        this.emit()
         setTimeout(() => {
-          this.fsm.transition(result.text ? 'completed' : 'stopped')
-          this.emit()
-          setTimeout(() => {
-            if (this.settings?.handsfreeEnabled) {
-              this.volume = 0; this.transcript = ''; this.message = ''
-              this.fsm.transition('listening')
-              this.emit()
-            }
-          }, 2000)
-        }, 50)
+          if (this.settings?.handsfreeEnabled) {
+            this.volume = 0; this.transcript = ''; this.message = ''
+            this.fsm.transition('listening')
+            this.emit()
+          }
+        }, 2000)
       },
       onError: (m: string) => {
         this.session = null

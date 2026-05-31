@@ -1,35 +1,59 @@
 /**
- * VoiceFloatingPanel — 语音面板 UI（纯状态观察者）
+ * VoiceFloatingPanel — 语音面板 UI
  *
- * 所有业务逻辑在 arch/Orchestrator 中。
- * 本组件只负责：创建 Orchestrator → 订阅 UIState → 渲染。
+ * 纯状态观察者：创建 Orchestrator → 注入 auto-send 回调 → 订阅 UIState → 渲染。
  */
 
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { useStore } from 'jotai'
 import { Loader2, Check } from 'lucide-react'
 import { Orchestrator } from './arch/Orchestrator'
-import type { VoiceUIState, PanelState } from './arch/types'
+import type { VoiceUIState } from './arch/types'
+import { agentChannelIdAtom, currentAgentSessionIdAtom, currentAgentWorkspaceIdAtom, agentSessionDraftsAtom, agentSessionDraftHtmlAtom, liveMessagesMapAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
+import { appModeAtom } from '@/atoms/app-mode'
+import { shouldAutoSend } from './voice-auto-send'
+import type { SDKMessage } from '@proma/shared'
 
 export function VoiceFloatingPanel(): React.ReactElement {
+  const store = useStore()
   const orchRef = React.useRef<Orchestrator | null>(null)
   const [ui, setUI] = React.useState<VoiceUIState>({
     state: 'stopped', volume: 0, transcript: '', message: '', settings: null,
   })
 
-  // 初始化
   React.useEffect(() => {
     const orch = new Orchestrator()
     orchRef.current = orch
 
+    // 注入 auto-send 回调
+    orch.onAutoSend = (text: string) => {
+      if (!shouldAutoSend(text, ui.settings?.autoSendEnabled ?? true, 'always')) return
+      if (store.get(appModeAtom) !== 'agent') return
+      const channelId = store.get(agentChannelIdAtom)
+      const sessionId = store.get(currentAgentSessionIdAtom)
+      const workspaceId = store.get(currentAgentWorkspaceIdAtom)
+      if (!sessionId || !channelId) return
+
+      store.set(agentSessionDraftsAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
+      store.set(agentSessionDraftHtmlAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
+      store.set(liveMessagesMapAtom, (prev) => {
+        const m = new Map(prev); const existing = m.get(sessionId) ?? []
+        m.set(sessionId, [...existing, { type: 'user', message: { content: [{ type: 'text', text }] }, parent_tool_use_id: null, _createdAt: Date.now() } as unknown as SDKMessage])
+        return m
+      })
+      store.set(agentStreamingStatesAtom, (prev) => {
+        const m = new Map(prev); m.set(sessionId, { running: true, content: '', toolActivities: [], startedAt: Date.now() }); return m
+      })
+      window.electronAPI.sendAgentMessage({ sessionId, userMessage: text, channelId, workspaceId: workspaceId ?? undefined }).catch(console.error)
+    }
+
     const unsub = orch.onUIState((s) => setUI({ ...s }))
 
-    // 读取初始设置
     window.electronAPI.getVoiceDictationSettings().then(s => {
       orch.toggleHandsfree(s).catch(() => {})
     }).catch(() => {})
 
-    // 监听设置变更
     const handler = () => {
       window.electronAPI.getVoiceDictationSettings().then(s => {
         orch.toggleHandsfree(s).catch(() => {})
@@ -37,7 +61,6 @@ export function VoiceFloatingPanel(): React.ReactElement {
     }
     window.addEventListener('proma:voice-settings-changed', handler)
 
-    // 监听快捷键停止
     const cts = window.electronAPI.onVoiceDictationToggleStop(() => {
       orch.stopRecording().catch(() => {})
     })
@@ -48,7 +71,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
       cts()
       orch.destroy()
     }
-  }, [])
+  }, [store])
 
   const { state, volume, transcript, message, settings } = ui
   const enabled = settings?.handsfreeEnabled ?? false
@@ -56,8 +79,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
 
   const panel = (
     <div className="fixed bottom-4 right-4 z-[9999]">
-      {/* 音量柱（stopped/listening 模式可见） */}
-      {(state === 'listening') && (
+      {state === 'listening' && (
         <div className="flex items-center justify-center rounded-xl border px-2.5 py-2 shadow-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700">
           <div className="flex items-end gap-[3px] h-[14px]">
             {[0.4, 0.7, 0.5, 0.9, 0.6].map((s, i) => (
@@ -73,18 +95,17 @@ export function VoiceFloatingPanel(): React.ReactElement {
         </div>
       )}
 
-      {/* 卡片（recording/processing/completed/error） */}
       {!['stopped', 'listening'].includes(state) && (
         <div className={`drop-shadow-2xl w-[340px] min-h-[100px] rounded-xl border-2 bg-white dark:bg-zinc-900 ${
           state === 'error' ? 'border-red-400 dark:border-red-600' :
-          state === 'completed' ? 'border-green-400 dark:border-green-600' :
+          state === 'processing' || state === 'completed' ? 'border-green-400 dark:border-green-600' :
           'border-zinc-200 dark:border-zinc-700'
         }`}>
           <div className="p-4">
             <div className="flex items-start gap-3">
               <div className={`flex size-[28px] shrink-0 items-center justify-center rounded-lg ${
                 state === 'error' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
-                state === 'completed' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
+                state === 'processing' || state === 'completed' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
                 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
               }`}>
                 {state === 'processing' ? <Loader2 className="size-3.5 animate-spin" strokeWidth={1.5} /> :
