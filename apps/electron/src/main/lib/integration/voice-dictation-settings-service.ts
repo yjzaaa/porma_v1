@@ -22,6 +22,7 @@ const DEFAULT_VOICE_DICTATION_SETTINGS: VoiceDictationSettings = {
   vadMinRecordMs: 500,
   autoSendEnabled: true,
   handsfreeEnabled: false,
+  engine: 'webspeech',
 }
 
 function encryptSecret(value: string): string {

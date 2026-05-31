@@ -67,6 +67,8 @@ export interface VoiceDictationSettings {
   autoSendEnabled: boolean
   /** 免提模式：说"Hey Proma"触发语音输入（基于浏览器 SpeechRecognition API） */
   handsfreeEnabled: boolean
+  /** ASR 引擎：doubao（豆包 IPC）/ webspeech（浏览器内置，零成本） */
+  engine: 'doubao' | 'webspeech'
 }
 
 /** 语音输入设置更新 */

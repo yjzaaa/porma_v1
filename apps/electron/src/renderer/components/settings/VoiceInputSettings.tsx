@@ -51,6 +51,11 @@ const LANGUAGE_OPTIONS = [
   { value: 'ko-KR', label: '韩语' },
 ]
 
+const ENGINE_OPTIONS = [
+  { value: 'webspeech', label: '浏览器内置识别（零成本，依赖 Chrome 语音引擎）' },
+  { value: 'doubao', label: '火山引擎豆包（需要配置 API 凭证）' },
+]
+
 const VOLCENGINE_SPEECH_SERVICE_URL = 'https://console.volcengine.com/speech/service/'
 
 export function VoiceInputSettings(): React.ReactElement {
@@ -314,6 +319,18 @@ export function VoiceInputSettings(): React.ReactElement {
             description="语音识别完成后，系统自动判断文本是否为完整指令，是则自动发送，无需手动点击发送按钮。"
             checked={settings.autoSendEnabled}
             onCheckedChange={(autoSendEnabled) => update({ autoSendEnabled })}
+          />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="识别引擎">
+        <SettingsCard>
+          <SettingsSelect
+            label="语音识别引擎"
+            description="Web Speech 内置在浏览器中，无需配置；豆包需要火山引擎凭证。"
+            value={settings.engine || 'webspeech'}
+            onValueChange={(engine) => update({ engine: engine as VoiceDictationSettings['engine'] })}
+            options={ENGINE_OPTIONS}
           />
         </SettingsCard>
       </SettingsSection>
