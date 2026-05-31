@@ -11,6 +11,7 @@
 
 **相关文件索引：**
 - `apps/electron/src/main/lib/integration/doubao-asr-service.ts` — 豆包 ASR WebSocket 协议
+- `apps/electron/src/main/lib/integration/voice-dictation-settings-service.ts` — 语音设置持久化
 - `apps/electron/src/main/lib/window/voice-dictation-window.ts` — 语音浮窗管理
 - `apps/electron/src/main/lib/text/text-output-service.ts` — 文本输出路由
 - `apps/electron/src/main/lib/text/text-insertion-service.ts` — 系统粘贴
@@ -18,9 +19,10 @@
 - `apps/electron/src/renderer/components/voice-dictation/VoiceDictationApp.tsx` — 语音浮窗 UI
 - `apps/electron/src/renderer/components/voice-dictation/voice-audio-utils.ts` — PCM 工具
 - `apps/electron/src/renderer/components/voice-dictation/voice-transcript-merge.ts` — 文本合并状态机
+- `apps/electron/src/renderer/components/voice-dictation/voice-auto-send.ts` — 自动发送判断
 - `apps/electron/src/renderer/lib/voice-input-focus.ts` — 焦点跟踪
-- `apps/electron/src/renderer/components/shortcuts/GlobalShortcuts.tsx` — 文本插入调度
-- `apps/electron/src/types/settings.ts` — 语音设置类型定义
+- `apps/electron/src/renderer/components/shortcuts/GlobalShortcuts.tsx` — 文本插入调度 + 自动发送
+- `apps/electron/src/types/settings.ts` — 语音设置类型定义（`VoiceDictationSettings`）
 
 ---
 
@@ -38,7 +40,7 @@ Week 1               Week 2               Week 3-4             Week 5-6         
 
 ---
 
-## Phase 1: VAD 自动停止（P0）
+## Phase 1: VAD 自动停止（P0）✅ 已完成
 
 ### Spec
 
@@ -56,13 +58,13 @@ Feature: VAD 自动停止
 
   Scenario: 正常说完一句话后自动停止
     Given: 用户正在录音中
-    When: 用户说完一句话，停顿超过 1.8 秒
+    When: 用户说完一句话，停顿超过 vadStopTimeoutMs（默认 1800ms）
     Then: 录音自动停止
     And: 文本自动提交
 
   Scenario: 说话中短暂停顿不触发停止
     Given: 用户正在录音中
-    When: 用户说话中停顿不超过 1.8 秒
+    When: 用户说话中停顿不超过 vadStopTimeoutMs
     Then: 录音继续
     And: 不触发停止
 
@@ -72,78 +74,49 @@ Feature: VAD 自动停止
     Then: 录音立即停止（保持现有行为）
 ```
 
-### 技术设计
+### 实际实现
 
-复用现有 `computeVolumePeak()` 计算音量峰值，在 `VoiceDictationApp.tsx` 中增加静音帧计数器和 `setTimeout`。
+**文件：** `VoiceDictationApp.tsx`
 
-- **静音阈值：** 音量峰值 < 0.01（当前 `AudioVisualizer` 的 `AudioVisualizer.MIN_DB` 对应值）
-- **静音超时：** 1800ms（略低于人类对话中自然停顿的 2 秒阈值）
-- **最短录音：** 500ms（防止误触发）
-
-### 任务列表
-
-#### Task 1.1: 添加 VAD 设置类型
-
-**文件：** `apps/electron/src/types/settings.ts`
+- **静音阈值：** `VAD_THRESHOLD = 0.01`（音量峰值低于此值视为静音）
+- **静音超时：** `settings.vadStopTimeoutMs`（默认 1800ms，设为 0 禁用 VAD）
+- **最短录音：** `settings.vadMinRecordMs`（默认 500ms，防止误触发）
 
 ```typescript
-// VoiceDictationSettings 中增加字段
-interface VoiceDictationSettings {
-  // ... 现有字段
-  /** VAD 自动停止：静音多少毫秒后自动停止录音，设为 0 禁用 */
-  vadStopTimeoutMs: number  // 默认 1800
-  /** VAD 自动停止：最短录音时长（毫秒），低于此时长不触发自动停止 */
-  vadMinRecordMs: number     // 默认 500
-}
-```
-
-#### Task 1.2: VoiceDictationApp 中实现 VAD
-
-**文件：** `apps/electron/src/renderer/components/voice-dictation/VoiceDictationApp.tsx`
-
-在现有多处修改：
-1. 增加 `silenceSinceRef`（最后检测到语音的时间戳）
-2. 在 `startAudioCapture` 的 `onaudioprocess` 回调中，每次计算音量峰值后更新 `silenceSinceRef`
-3. 增加 `vadTimerRef` 用于 setTimeout
-
-```typescript
-// 新增 refs
-const silenceSinceRef = React.useRef<number>(0)
+// VoiceDictationApp.tsx:45-49 — VAD refs
+const silenceSinceRef = React.useRef<number>(-1)
+const recordingStartedAtRef = React.useRef<number>(0)
 const vadTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
-// 在 onaudioprocess 回调中增加:
+// VoiceDictationApp.tsx:258-284 — VAD 核心检测（在 onaudioprocess 回调中）
+const VAD_THRESHOLD = 0.01
 const now = Date.now()
-if (peak > VAD_THRESHOLD) {
-  silenceSinceRef.current = now
+if (peak >= VAD_THRESHOLD) {
+  silenceSinceRef.current = now  // 检测到语音，刷新时间戳
 }
-// 检查静音超时
-if (vadStopTimeoutMs > 0 && 
-    now - silenceSinceRef.current > vadStopTimeoutMs &&
-    now - recordingStartedRef.current > vadMinRecordMs) {
-  stopRecording()
+if (timeoutMs > 0 &&
+    now - silenceSinceRef.current >= timeoutMs &&
+    now - recordingStartedAtRef.current >= minRecordMs) {
+  vadTimerRef.current = setTimeout(() => {
+    stopRecording().catch(() => {})
+  }, 0)
 }
 ```
 
-#### Task 1.3: 设置页面增加 VAD 配置
+**设置项：** `VoiceDictationSettings.vadStopTimeoutMs` 和 `vadMinRecordMs`，在 `voice-dictation-settings-service.ts` 中定义默认值。
 
-**文件：** `apps/electron/src/renderer/components/settings/VoiceInputSettings.tsx`
+### 验收状态
 
-增加静音超时和最短录音时长的滑块配置：
-- 静音超时：1.0s / 1.8s（默认）/ 3.0s / 5.0s / 禁用
-- 最短录音：300ms / 500ms（默认）/ 1000ms
-
-### 验收标准
-
-- [ ] 说完话停顿 > 1.8s → 自动停止录音并提交文本
-- [ ] 说话中短暂停顿（< 1.8s）→ 不触发停止
-- [ ] 录音 < 500ms → 不触发自动停止
-- [ ] 手动 Ctrl+` 停止 → 仍然生效
-- [ ] 设置中可调整静音超时和最短录音时长
-- [ ] 设置为 0 时 VAD 功能禁用，行为回退到手动模式
+- [x] 说完话停顿 > 1.8s → 自动停止录音并提交文本
+- [x] 说话中短暂停顿（< 1.8s）→ 不触发停止
+- [x] 录音 < 500ms → 不触发自动停止
+- [x] 手动 Ctrl+` 停止 → 仍然生效
+- [x] 设置中可调整静音超时和最短录音时长
+- [x] 设置为 0 时 VAD 功能禁用，行为回退到手动模式
 
 ---
 
-## Phase 2: 语义自动发送（P1）
+## Phase 2: 语义自动发送（P1）✅ 已完成（方案一：直接发送模式）
 
 ### Spec
 
@@ -159,85 +132,126 @@ Feature: 语义自动发送
   I want: 系统自动判断我的语音是否"说完了一个完整的指令"
   So that: 无需手动点击发送按钮
 
-  Scenario: 完整指令自动发送
-    Given: 语音识别完成, 文本为"帮我重构 agent-orchestrator.ts 的 buildSdkEnv 方法"
-    When: 语义分析判断为"完整指令"
-    Then: 文本自动发送到 Agent/Chat
-
-  Scenario: 不完整输入不发送
-    Given: 语音识别完成, 文本为"帮我看看这个"
-    When: 语义分析判断为"不完整"
-    Then: 文本插入输入框但不发送
-    And: 用户可以继续语音追加或手动编辑后发送
+  Scenario: 自动发送（always 模式）
+    Given: autoSendEnabled = true, mode = 'always'
+    When: 语音识别完成，文本长度 >= 4 字符
+    Then: 文本自动发送到 Agent
 
   Scenario: 用户可在设置中关闭自动发送
-    Given: 设置中 autoSendEnabled = false
+    Given: autoSendEnabled = false
     When: 语音识别完成
     Then: 文本插入输入框，不自动发送
+
+  Scenario: 文本太短不发送
+    Given: autoSendEnabled = true
+    When: 语音识别完成，文本为 "好的"（< 4 字符）
+    Then: 文本插入输入框但不自动发送
 ```
 
-### 技术设计
+### 实际实现
 
-在 `commitAndHide` 流程后（文本已插入输入框），异步调用轻量 AI 判断是否为"完整操作指令"，是则自动触发发送。
+**当前采用方案一（'always' 模式）：** 只要 `autoSendEnabled=true` 且文本长度 >= 4 字符就直接发送，无需 AI 调用。
 
-```
-文本 → 调用当前 Chat 渠道（轻量模型）→ {"complete": true/false} → 触发 send / 仅插入
-```
-
-- **模型：** 复用用户当前 Chat 渠道，model 优先用最便宜的（如 DeepSeek V3 / Haiku）
-- **Prompt：** 极简，单行判断
-- **超时：** 800ms，超时则按保守策略（不自动发送）
-- **缓存：** 本地基于文本 hash 缓存判断结果（相同文本不重复调 API）
-
-### 任务列表
-
-#### Task 2.1: 创建语义判断服务
-
-**创建：** `apps/electron/src/main/lib/integration/semantic-completeness.ts`
+**文件：** `voice-auto-send.ts`
 
 ```typescript
-/** 判断语音输入文本是否为完整可执行指令 */
-export async function isCompleteCommand(text: string, channelId: string): Promise<boolean> {
-  // 1. 句末标点检测（快速路径）
-  if (/[。！？.!?]$/.test(text.trim())) {
-    return true
-  }
-  // 2. 字数太少 → 不完整
-  if (text.trim().length < 4) {
-    return false
-  }
-  // 3. 调 AI 判断
-  const result = await callLightweightModel(text, channelId)
-  return result.complete
+// voice-auto-send.ts — 自动发送判断
+const MIN_AUTO_SEND_LENGTH = 4
+
+export function shouldAutoSend(
+  text: string,
+  enabled: boolean,
+  mode: 'always' | 'smart' | 'ai',
+): boolean {
+  if (!enabled) return false
+  const trimmed = text.trim()
+  if (trimmed.length < MIN_AUTO_SEND_LENGTH) return false
+
+  if (mode === 'always') return true         // ← 当前使用
+  if (mode === 'smart') return smartCheck()  // 预留：本地正则判断
+  if (mode === 'ai') return aiCheck()        // 预留：AI 语义判断
 }
 ```
 
-快速路径（句末标点检测 + 长度检测）可在本地完成，命中率预计 > 70%，大幅减少 API 调用。
+**自动发送流程（GlobalShortcuts.tsx）：**
 
-#### Task 2.2: 在文本提交流程中插入自动发送
+```
+文本插入 → GlobalShortcuts.onVoiceDictationInsertText()
+  → 路径 A: TipTap 编辑器拦截 → tryAutoSendAgent()
+  → 路径 B: Agent 草稿路径 → shouldAutoSend() → sendAgentMessage()
+```
 
-**修改：** `apps/electron/src/renderer/components/shortcuts/GlobalShortcuts.tsx`
+自动发送前的乐观更新（`tryAutoSendAgent`）：
+1. 清除草稿（`agentSessionDraftsAtom`）
+2. 设置流式状态（`agentStreamingStatesAtom`）
+3. 乐观插入用户消息（`liveMessagesMapAtom`）
+4. IPC 调用 `sendAgentMessage`
 
-在 `INSERT_TEXT` 事件处理中，插入文本后异步调用语义判断，若返回 `true` 则自动触发 `sendMessage`。
+**预留但未启用的模式：**
+- `smart` 模式：本地正则判断（`INCOMPLETE_ENDINGS` / `SENTENCE_END_PUNCTUATION`）
+- `ai` 模式：调用 AI 判断完整性（需创建 `semantic-completeness.ts`）
 
-#### Task 2.3: 设置页面增加自动发送开关
+**设置项：** `VoiceDictationSettings.autoSendEnabled`（默认 `true`）
 
-**修改：** `apps/electron/src/renderer/components/settings/VoiceInputSettings.tsx`
+### 与原计划的差异
 
-增加 `autoSendEnabled: boolean` 开关。
+| 原计划 | 实际实现 |
+|--------|---------|
+| 创建 `semantic-completeness.ts` AI 判断服务 | 未创建，采用 'always' 模式直接发送 |
+| 调用轻量 AI 模型判断完整性 | 仅检查文本长度 >= 4 |
+| 800ms 超时降级 | 不涉及，无 AI 调用 |
+| 本地 hash 缓存 | 不涉及 |
 
-### 验收标准
+### 验收状态
 
-- [ ] "帮我重构 agent-orchestrator.ts" → 自动发送
-- [ ] "我想问一下" → 不自动发送，留在输入框
-- [ ] "看看"（字数 < 4）→ 不自动发送
-- [ ] "这个项目的架构是什么？"（问号结尾）→ 自动发送
-- [ ] 关闭 autoSendEnabled 后 → 从不自动发送
-- [ ] 网络超时 800ms → 优雅降级（不发送）
+- [x] "帮我重构 agent-orchestrator.ts"（>= 4 字符）→ 自动发送
+- [x] "好的"（< 4 字符）→ 不自动发送
+- [x] 关闭 autoSendEnabled 后 → 从不自动发送
+- [ ] ~~"我想问一下" → 不自动发送（smart 模式未启用）~~
+- [ ] ~~"这个项目的架构是什么？"（问号结尾）→ smart 模式判断~~
+
+### 后续增强（可选）
+
+如需启用智能判断：
+1. 在 `shouldAutoSend` 调用处将 `mode` 从 `'always'` 改为 `'smart'` 或 `'ai'`
+2. `smart` 模式的正则已写好（`INCOMPLETE_ENDINGS` / `SENTENCE_END_PUNCTUATION`），可直接启用
+3. `ai` 模式需创建 `semantic-completeness.ts` 服务
 
 ---
 
-## Phase 3: 唤醒词检测（P2）
+## 文本提交流程（Phase 1+2 支撑）
+
+当前实现的完整提交链路，含三个触发时机：
+
+```
+触发时机 1 — 用户手动停止:
+  stopRecording() → scheduleCommit(STOP_COMMIT_TIMEOUT_MS = 1400ms)
+
+触发时机 2 — ASR 返回 isFinal:
+  转写事件回调 → scheduleCommit(FINAL_COMMIT_DELAY_MS = 500ms)
+
+触发时机 3 — VAD 静音超时:
+  onaudioprocess → 检测静音 → stopRecording() → 间接触发时机 1
+```
+
+**提交流程：**
+
+```
+commitAndHide() [防重入: commitInFlightRef]
+  → IPC commitVoiceDictation
+    → text-output-service.commitVoiceDictationText()
+      → outputMode='auto' 且 Proma 焦点 → INSERT_TEXT IPC 推送
+      → 否则 → 光标粘贴 / 剪贴板
+  → 成功后 280ms 自动隐藏浮窗
+
+INSERT_TEXT → GlobalShortcuts.onVoiceDictationInsertText()
+  → 路径 A: TipTap 编辑器拦截 → tryAutoSendAgent()
+  → 路径 B: Agent 草稿写入 → shouldAutoSend() → sendAgentMessage()
+```
+
+---
+
+## Phase 3: 唤醒词检测（P2）🔲 未开始
 
 ### Spec
 
@@ -324,7 +338,7 @@ bun add @picovoice/porcupine-node @picovoice/porcupine-web
 
 ---
 
-## Phase 4: 语音命令（P3）
+## Phase 4: 语音命令（P3）🔲 未开始
 
 ### Spec
 
@@ -402,7 +416,7 @@ function executeVoiceCommand(command: VoiceCommand, context: CommandContext): vo
 
 ---
 
-## Phase 5: 全程免提模式（P4）
+## Phase 5: 全程免提模式（P4）🔲 未开始
 
 ### Spec
 
@@ -472,12 +486,12 @@ type HandsfreeState = 'idle' | 'listening' | 'recording' | 'processing' | 'speak
 
 ## 阶段交付总结
 
-| 阶段 | 交付物 | 预计工时 | 独立上线 |
-|------|--------|---------|---------|
-| Phase 1 | VAD 自动停止 | 2-3 天 | 是 |
-| Phase 2 | 语义自动发送 | 3-4 天 | 是 |
-| Phase 3 | 唤醒词检测 | 5-7 天 | 是 |
-| Phase 4 | 语音命令 | 3-4 天 | 是 |
-| Phase 5 | 免提模式 | 5-7 天 | 是 |
+| 阶段 | 交付物 | 状态 | 实际方案 |
+|------|--------|------|---------|
+| Phase 1 | VAD 自动停止 | ✅ 已完成 | `VoiceDictationApp.tsx` 内静音检测 + `vadStopTimeoutMs` / `vadMinRecordMs` 设置 |
+| Phase 2 | 语义自动发送 | ✅ 已完成（always 模式） | `voice-auto-send.ts` 判断 + `GlobalShortcuts.tsx` 乐观发送，预留 smart/ai 模式 |
+| Phase 3 | 唤醒词检测 | 🔲 未开始 | Porcupine 离线引擎 |
+| Phase 4 | 语音命令 | 🔲 未开始 | 本地正则匹配 |
+| Phase 5 | 免提模式 | 🔲 未开始 | 状态机 + 音频反馈 |
 
 每个 Phase 结束时代码合并到 main 分支，作为独立功能发布，不用等全部完成。
