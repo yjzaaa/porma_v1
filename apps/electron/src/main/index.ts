@@ -471,11 +471,8 @@ async function bootstrap(): Promise<void> {
   safeRun('registerGlobalShortcut:show-main-window', () =>
     registerGlobalShortcut('show-main-window', showAndFocusMainWindow),
   )
-  safeRun('registerGlobalShortcut:voice-dictation', () =>
-    registerGlobalShortcut('voice-dictation', () => {
-      toggleVoiceDictationWindow({ targetIsProma: mainWindow?.isFocused() === true })
-    }),
-  )
+  // VoiceFloatingPanel handles voice detection inline — no separate window needed
+  // safeRun('registerGlobalShortcut:voice-dictation', ...) retired
 
   // 启动所有已注册的 Bridge（飞书/钉钉/微信等）
   await safeAwait('startAllBridges', () => startAllBridges())

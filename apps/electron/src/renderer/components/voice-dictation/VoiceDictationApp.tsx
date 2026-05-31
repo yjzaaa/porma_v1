@@ -391,6 +391,23 @@ export function VoiceDictationApp(): React.ReactElement {
       .then(() => {
         if (sessionIdRef.current !== nextSessionId) return
         asrReadyRef.current = true
+
+        // 免提模式：先发送历史音频缓冲区（检测到语音前的 ~1.5 秒）
+        window.electronAPI.getHandsfreeBuffer().then((buf) => {
+          if (buf && buf.byteLength > 0) {
+            const CHUNK = 6400
+            let offset = 0
+            while (offset < buf.byteLength) {
+              const end = Math.min(offset + CHUNK, buf.byteLength)
+              window.electronAPI.sendVoiceDictationAudio({
+                sessionId: nextSessionId,
+                data: buf.slice(offset, end),
+              }).catch(console.error)
+              offset = end
+            }
+          }
+        }).catch(() => {})
+
         flushQueuedAudio()
         if (stoppingRef.current) {
           flushPendingAudio()
@@ -518,7 +535,14 @@ export function VoiceDictationApp(): React.ReactElement {
                     : <Mic className="size-4" />}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-foreground">Proma 语音输入</div>
+              <div className="truncate text-sm font-medium text-foreground flex items-center gap-1.5">
+                Proma 语音输入
+                {settingsRef.current?.handsfreeEnabled && (
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-normal text-primary leading-none">
+                    免提
+                  </span>
+                )}
+              </div>
               <div className="truncate text-xs text-muted-foreground">{message}</div>
             </div>
           </div>

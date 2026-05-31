@@ -21,6 +21,7 @@ const DEFAULT_VOICE_DICTATION_SETTINGS: VoiceDictationSettings = {
   vadStopTimeoutMs: 1800,
   vadMinRecordMs: 500,
   autoSendEnabled: true,
+  handsfreeEnabled: false,
 }
 
 function encryptSecret(value: string): string {

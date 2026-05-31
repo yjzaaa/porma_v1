@@ -9,7 +9,7 @@
  * 4. 监听菜单 IPC 事件（Cmd+W 关闭标签）
  */
 
-import React, { useEffect, useCallback } from 'react'
+import React, { useEffect, useCallback, useRef } from 'react'
 import { unstable_batchedUpdates } from 'react-dom'
 import type { VoiceDictationSettings } from '../../../types'
 import type { SDKMessage } from '@proma/shared'
@@ -17,6 +17,7 @@ import { useAtomValue, useSetAtom, useAtom, useStore } from 'jotai'
 import { appModeAtom } from '@/atoms/app-mode'
 import { settingsOpenAtom, channelFormDirtyAtom, settingsCloseRequestedAtom } from '@/atoms/settings-tab'
 import { searchDialogOpenAtom } from '@/atoms/search-atoms'
+import { handsfreeStateAtom } from '@/atoms/handsfree-state-atom'
 import {
   tabsAtom,
   activeTabIdAtom,
@@ -139,6 +140,7 @@ export function GlobalShortcuts(): null {
   const shortcutOverrides = useAtomValue(shortcutOverridesAtom)
   const setSendWithCmdEnter = useSetAtom(sendWithCmdEnterAtom)
   const [voiceDictationSettings, setVoiceDictationSettings] = React.useState<VoiceDictationSettings | null>(null)
+  const setHandsfreeState = useSetAtom(handsfreeStateAtom)
   const { createChat, createAgent } = useCreateSession()
 
   // Tab 管理（用于关闭标签页）
@@ -163,8 +165,28 @@ export function GlobalShortcuts(): null {
     // 获取语音输入设置
     window.electronAPI.getVoiceDictationSettings().then((voiceSettings) => {
       setVoiceDictationSettings(voiceSettings)
+      setHandsfreeState({
+        handsfreeEnabled: voiceSettings.handsfreeEnabled,
+        detectorState: 'inactive',
+        voiceDictationActive: false,
+      })
     }).catch(console.error)
-  }, [setShortcutOverrides, setSendWithCmdEnter])
+  }, [setShortcutOverrides, setSendWithCmdEnter, setHandsfreeState])
+
+  // 监听语音设置变更（设置面板保存后触发）并重新加载
+  useEffect(() => {
+    const handler = (): void => {
+      window.electronAPI.getVoiceDictationSettings().then((voiceSettings) => {
+        setVoiceDictationSettings(voiceSettings)
+        setHandsfreeState((prev) => ({
+          ...prev,
+          handsfreeEnabled: voiceSettings.handsfreeEnabled,
+        }))
+      }).catch(console.error)
+    }
+    window.addEventListener('proma:voice-settings-changed', handler)
+    return () => window.removeEventListener('proma:voice-settings-changed', handler)
+  }, [setHandsfreeState])
 
   // 配置变更时同步到注册表
   useEffect(() => {
@@ -539,6 +561,17 @@ export function GlobalShortcuts(): null {
     })
     return cleanup
   }, [store])
+
+  // ===== 语音浮窗显示状态广播监听 =====
+  useEffect(() => {
+    const cleanup = window.electronAPI.onVoiceDictationBroadcastState((data) => {
+      setHandsfreeState((prev) => ({
+        ...prev,
+        voiceDictationActive: data.visible,
+      }))
+    })
+    return cleanup
+  }, [setHandsfreeState])
 
   // ===== 菜单栏 → 打开 / 创建会话 =====
 

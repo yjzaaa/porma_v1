@@ -9,6 +9,7 @@ import { join } from 'path'
 import { VOICE_DICTATION_IPC_CHANNELS } from '../../../types'
 import { getSettings, updateSettings } from '../storage/settings-service'
 import { captureVoiceDictationTarget } from '../text/text-output-service'
+import { getMainWindow, isMainWindow } from '../../index'
 
 let voiceDictationWindow: BrowserWindow | null = null
 let voiceDictationTargetCaptured = false
@@ -19,9 +20,13 @@ let suppressPositionPersistence = false
 let suppressPositionPersistenceTimer: ReturnType<typeof setTimeout> | null = null
 let positionSaveTimer: ReturnType<typeof setTimeout> | null = null
 
-const WINDOW_WIDTH = 480
-const WINDOW_HEIGHT = 160
-const MIN_WINDOW_HEIGHT = 148
+/** 主窗口移动/缩放后重新定位语音浮窗，取消监听 */
+let mainWindowTrackCleanup: (() => void) | null = null
+
+const WINDOW_WIDTH = 44
+const WINDOW_HEIGHT = 44
+const CARD_WIDTH = 380
+const MIN_WINDOW_HEIGHT = 36
 const WINDOW_MARGIN = 12
 const ACTIVATE_SUPPRESSION_MS = 1800
 const POSITION_SAVE_DEBOUNCE_MS = 240
@@ -200,6 +205,42 @@ function captureTargetForNextSession(targetIsProma?: boolean): void {
   voiceDictationTargetCaptured = true
 }
 
+/** 将浮窗对齐到主窗口右下角 */
+function snapToMainWindowBottomRight(): void {
+  if (!voiceDictationWindow || voiceDictationWindow.isDestroyed()) return
+  const mainWin = getMainWindow()
+  if (!mainWin || mainWin.isDestroyed()) return
+
+  const mainBounds = mainWin.getBounds()
+  const floatBounds = voiceDictationWindow.getBounds()
+  setVoiceDictationBoundsWithoutSaving(clampBoundsToVisibleWorkArea({
+    x: Math.round(mainBounds.x + mainBounds.width - floatBounds.width - WINDOW_MARGIN),
+    y: Math.round(mainBounds.y + mainBounds.height - floatBounds.height - WINDOW_MARGIN),
+    width: floatBounds.width,
+    height: floatBounds.height,
+  }))
+}
+
+/** 监听主窗口移动/缩放，自动重贴右下角 */
+function startMainWindowTracking(): void {
+  stopMainWindowTracking()
+  const mainWin = getMainWindow()
+  if (!mainWin || mainWin.isDestroyed()) return
+
+  const onMove = (): void => { snapToMainWindowBottomRight() }
+  mainWin.on('moved', onMove)
+  mainWin.on('resize', onMove)
+  mainWindowTrackCleanup = () => {
+    mainWin.removeListener('moved', onMove)
+    mainWin.removeListener('resize', onMove)
+  }
+}
+
+function stopMainWindowTracking(): void {
+  mainWindowTrackCleanup?.()
+  mainWindowTrackCleanup = null
+}
+
 function positionAndShow(): void {
   if (!voiceDictationWindow || voiceDictationWindow.isDestroyed()) return
 
@@ -207,23 +248,28 @@ function positionAndShow(): void {
     captureTargetForNextSession()
   }
 
-  setVoiceDictationBoundsWithoutSaving(getInitialVoiceDictationBounds())
+  snapToMainWindowBottomRight()
+  startMainWindowTracking()
 
   // 语音浮窗只是系统级提示层，不应抢焦点或改变 Proma 主窗口前后台状态。
   voiceDictationWindow.showInactive()
   voiceDictationWindow.webContents.send(VOICE_DICTATION_IPC_CHANNELS.SHOWN)
+  broadcastDialogVisibilityToMain(true)
 }
 
-export function resizeVoiceDictationWindow(height: number): void {
+export function resizeVoiceDictationWindow(input: VoiceDictationResizeInput): void {
   if (!voiceDictationWindow || voiceDictationWindow.isDestroyed()) return
   const bounds = voiceDictationWindow.getBounds()
   const display = screen.getDisplayMatching(bounds)
   const maxHeight = Math.max(MIN_WINDOW_HEIGHT, display.workArea.height - WINDOW_MARGIN * 2)
-  const nextHeight = Math.max(MIN_WINDOW_HEIGHT, Math.min(maxHeight, Math.round(height)))
+  const nextWidth = input.width != null
+    ? Math.max(44, Math.min(display.workArea.width - WINDOW_MARGIN * 2, Math.round(input.width)))
+    : bounds.width
+  const nextHeight = Math.max(MIN_WINDOW_HEIGHT, Math.min(maxHeight, Math.round(input.height)))
   setVoiceDictationBoundsWithoutSaving(clampBoundsToVisibleWorkArea({
     x: bounds.x,
     y: bounds.y,
-    width: WINDOW_WIDTH,
+    width: nextWidth,
     height: nextHeight,
   }))
 }
@@ -235,6 +281,15 @@ export function hideVoiceDictationWindow(): void {
     voiceDictationWindow.hide()
   }
   voiceDictationTargetCaptured = false
+  broadcastDialogVisibilityToMain(false)
+}
+
+/** 向主窗口广播语音浮窗的显示状态（用于更新 UI 指示器） */
+function broadcastDialogVisibilityToMain(visible: boolean): void {
+  const mainWin = getMainWindow()
+  if (mainWin && !mainWin.isDestroyed()) {
+    mainWin.webContents.send(VOICE_DICTATION_IPC_CHANNELS.BROADCAST_STATE_TO_MAIN, { visible })
+  }
 }
 
 function suppressPromaActivationBriefly(): void {
@@ -279,9 +334,10 @@ function getInitialVoiceDictationBounds(): Electron.Rectangle {
   const display = screen.getDisplayNearestPoint(cursorPoint)
   const { x, y, width, height } = display.workArea
 
+  // 贴右下角
   return clampBoundsToVisibleWorkArea({
-    x: Math.round(x + (width - WINDOW_WIDTH) / 2),
-    y: Math.round(y + height * 0.28),
+    x: Math.round(x + width - WINDOW_WIDTH - WINDOW_MARGIN),
+    y: Math.round(y + height - WINDOW_HEIGHT - WINDOW_MARGIN),
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
   })

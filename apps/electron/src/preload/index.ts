@@ -323,6 +323,9 @@ export interface ElectronAPI {
   updateVoiceDictationSettings: (updates: import('../types').VoiceDictationSettingsUpdate) => Promise<import('../types').VoiceDictationSettings>
   testVoiceDictationConnection: (updates?: import('../types').VoiceDictationSettingsUpdate) => Promise<import('../types').VoiceDictationTestResult>
   toggleVoiceDictation: () => Promise<void>
+  activateFromHandsfree: () => Promise<void>
+  storeHandsfreeBuffer: (data: ArrayBuffer) => Promise<void>
+  getHandsfreeBuffer: () => Promise<ArrayBuffer | null>
   startVoiceDictation: (input: import('../types').VoiceDictationStartInput) => Promise<void>
   sendVoiceDictationAudio: (input: import('../types').VoiceDictationAudioChunkInput) => Promise<void>
   stopVoiceDictation: (input: import('../types').VoiceDictationStopInput) => Promise<void>
@@ -335,6 +338,7 @@ export interface ElectronAPI {
   onVoiceDictationTranscript: (callback: (event: import('../types').VoiceDictationTranscriptEvent) => void) => () => void
   onVoiceDictationState: (callback: (event: import('../types').VoiceDictationStateEvent) => void) => () => void
   onVoiceDictationInsertText: (callback: (data: { text: string }) => void) => () => void
+  onVoiceDictationBroadcastState: (callback: (data: { visible: boolean }) => void) => () => void
   checkMicrophonePermission: () => Promise<import('../types').MicPermissionResult>
   requestMicrophonePermission: () => Promise<import('../types').MicPermissionResult>
 

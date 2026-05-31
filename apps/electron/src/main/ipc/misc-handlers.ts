@@ -210,6 +210,49 @@ export function registerMiscHandlers(): void {
   )
 
   ipcMain.handle(
+    VOICE_DICTATION_IPC_CHANNELS.ACTIVATE_FROM_HANDSFREE,
+    async (event): Promise<void> => {
+      // 原子操作：先启用语音输入，再打开浮窗
+      // 在同一个事件循环内完成，避免渲染进程两次 IPC 的竞态
+      const { getVoiceDictationSettings, updateVoiceDictationSettings } = await import('../lib/integration/voice-dictation-settings-service')
+      const current = getVoiceDictationSettings()
+      if (!current.enabled) {
+        updateVoiceDictationSettings({ enabled: true })
+      }
+
+      // 如果浮窗已显示且正在录音中，不做任何事（防止检测器反复 toggle 中断录音）
+      const { getVoiceDictationWindow, toggleVoiceDictationWindow } = await import('../lib/window/voice-dictation-window')
+      const existingWin = getVoiceDictationWindow()
+      if (existingWin && !existingWin.isDestroyed() && existingWin.isVisible()) {
+        return
+      }
+
+      const sourceWindow = BrowserWindow.fromWebContents(event.sender)
+      toggleVoiceDictationWindow({ targetIsProma: !!sourceWindow })
+    }
+  )
+
+  // ===== 免提模式录音缓冲区（环形缓冲区 IPC 桥接） =====
+
+  let handsfreeAudioBuffer: ArrayBuffer | null = null
+
+  ipcMain.handle(
+    VOICE_DICTATION_IPC_CHANNELS.STORE_HANDSFREE_BUFFER,
+    (_, data: ArrayBuffer): void => {
+      handsfreeAudioBuffer = data
+    }
+  )
+
+  ipcMain.handle(
+    VOICE_DICTATION_IPC_CHANNELS.GET_HANDSFREE_BUFFER,
+    (): ArrayBuffer | null => {
+      const buf = handsfreeAudioBuffer
+      handsfreeAudioBuffer = null
+      return buf
+    }
+  )
+
+  ipcMain.handle(
     VOICE_DICTATION_IPC_CHANNELS.START,
     async (event, input: VoiceDictationStartInput): Promise<void> => {
       const { getVoiceDictationSettings } = await import('../lib/integration/voice-dictation-settings-service')
@@ -265,7 +308,7 @@ export function registerMiscHandlers(): void {
     VOICE_DICTATION_IPC_CHANNELS.RESIZE,
     async (_, input: VoiceDictationResizeInput): Promise<void> => {
       const { resizeVoiceDictationWindow } = await import('../lib/window/voice-dictation-window')
-      resizeVoiceDictationWindow(input.height)
+      resizeVoiceDictationWindow(input)
     }
   )
 

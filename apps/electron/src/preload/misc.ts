@@ -48,6 +48,7 @@ const api: Record<string, unknown> = {
   testVoiceDictationConnection: (updates?: VoiceDictationSettingsUpdate) =>
     ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.TEST_CONNECTION, updates),
   toggleVoiceDictation: () => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.TOGGLE),
+  activateFromHandsfree: () => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.ACTIVATE_FROM_HANDSFREE),
   startVoiceDictation: (input: VoiceDictationStartInput) =>
     ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.START, input),
   sendVoiceDictationAudio: (input: VoiceDictationAudioChunkInput) =>
@@ -59,6 +60,8 @@ const api: Record<string, unknown> = {
   commitVoiceDictation: (input: VoiceDictationCommitInput) =>
     ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.COMMIT, input),
   hideVoiceDictation: () => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.HIDE),
+  storeHandsfreeBuffer: (data: ArrayBuffer) => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.STORE_HANDSFREE_BUFFER, data),
+  getHandsfreeBuffer: () => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.GET_HANDSFREE_BUFFER),
   resizeVoiceDictation: (input: VoiceDictationResizeInput) =>
     ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.RESIZE, input),
 
@@ -90,6 +93,12 @@ const api: Record<string, unknown> = {
     const listener = (_: unknown, data: { text: string }): void => callback(data)
     ipcRenderer.on(VOICE_DICTATION_IPC_CHANNELS.INSERT_TEXT, listener)
     return () => { ipcRenderer.removeListener(VOICE_DICTATION_IPC_CHANNELS.INSERT_TEXT, listener) }
+  },
+
+  onVoiceDictationBroadcastState: (callback: (data: { visible: boolean }) => void) => {
+    const listener = (_: unknown, data: { visible: boolean }): void => callback(data)
+    ipcRenderer.on(VOICE_DICTATION_IPC_CHANNELS.BROADCAST_STATE_TO_MAIN, listener)
+    return () => { ipcRenderer.removeListener(VOICE_DICTATION_IPC_CHANNELS.BROADCAST_STATE_TO_MAIN, listener) }
   },
 
   checkMicrophonePermission: () => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.CHECK_MIC_PERMISSION),

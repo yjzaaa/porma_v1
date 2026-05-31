@@ -106,6 +106,7 @@ export function VoiceInputSettings(): React.ReactElement {
       const saved = await window.electronAPI.updateVoiceDictationSettings(optimistic)
       setSettings(saved)
       window.electronAPI.reregisterGlobalShortcuts().catch(console.error)
+      window.dispatchEvent(new CustomEvent('proma:voice-settings-changed'))
     } catch (error) {
       console.error('[语音输入] 保存设置失败:', error)
       toast.error('保存语音输入设置失败')
@@ -313,6 +314,23 @@ export function VoiceInputSettings(): React.ReactElement {
             description="语音识别完成后，系统自动判断文本是否为完整指令，是则自动发送，无需手动点击发送按钮。"
             checked={settings.autoSendEnabled}
             onCheckedChange={(autoSendEnabled) => update({ autoSendEnabled })}
+          />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="免提模式">
+        <SettingsCard>
+          <SettingsToggle
+            label="启用免提模式"
+            description={settings.handsfreeEnabled
+              ? '已开启：对着麦克风连续说话即可自动触发语音输入（基于 Web Audio API 能量检测，不说话时关闭麦克风，零资源消耗）。'
+              : '开启后，对着麦克风说话即可自动触发语音输入，无需按 Ctrl+`。基于 Web Audio API 能量检测，不说话时自动关闭麦克风。'}
+            checked={settings.handsfreeEnabled}
+            onCheckedChange={(handsfreeEnabled) => {
+              // 开启免提模式时自动启用语音输入
+              const extra = handsfreeEnabled && !settings.enabled ? { enabled: true } : {}
+              update({ ...extra, handsfreeEnabled })
+            }}
           />
         </SettingsCard>
       </SettingsSection>

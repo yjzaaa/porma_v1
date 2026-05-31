@@ -65,6 +65,8 @@ export interface VoiceDictationSettings {
   vadMinRecordMs: number
   /** 语义自动发送：语音识别完成后是否自动判断并发送完整指令 */
   autoSendEnabled: boolean
+  /** 免提模式：说"Hey Proma"触发语音输入（基于浏览器 SpeechRecognition API） */
+  handsfreeEnabled: boolean
 }
 
 /** 语音输入设置更新 */
@@ -115,6 +117,7 @@ export interface VoiceDictationCommitInput {
 
 /** 调整语音输入浮窗尺寸参数 */
 export interface VoiceDictationResizeInput {
+  width?: number
   height: number
 }
 
@@ -336,6 +339,14 @@ export const VOICE_DICTATION_IPC_CHANNELS = {
   CHECK_MIC_PERMISSION: 'voice-dictation:check-mic-permission',
   /** 请求麦克风权限 */
   REQUEST_MIC_PERMISSION: 'voice-dictation:request-mic-permission',
+  /** 免提模式激活：原子操作（启用语音输入 + 打开浮窗），防止竞态 */
+  ACTIVATE_FROM_HANDSFREE: 'voice-dictation:activate-handsfree',
+  /** 免提模式存储录音缓冲（渲染进程 → 主进程） */
+  STORE_HANDSFREE_BUFFER: 'voice-dictation:store-handsfree-buffer',
+  /** 免提模式获取并清空录音缓冲（主进程 → 渲染进程） */
+  GET_HANDSFREE_BUFFER: 'voice-dictation:get-handsfree-buffer',
+  /** 免提/语音状态广播到主窗口（语音浮窗 → 主进程 → 主窗口） */
+  BROADCAST_STATE_TO_MAIN: 'voice-dictation:broadcast-state-to-main',
 } as const
 
 /** 快速任务提交输入 */
