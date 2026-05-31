@@ -86,7 +86,6 @@ export function LeftSidebar({ width }: LeftSidebarProps): React.ReactElement {
   const setSettingsTab = useSetAtom(settingsTabAtom)
   const setSettingsOpen = useSetAtom(settingsOpenAtom)
   const setSearchDialogOpen = useSetAtom(searchDialogOpenAtom)
-
   // ---- Derived state ----
   const workingGroups = useAtomValue(workingSessionGroupsAtom)
   const workingSessionIds = useAtomValue(workingSessionIdsSetAtom)

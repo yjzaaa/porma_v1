@@ -30,6 +30,8 @@ import { getFetchFn } from '../network/proxy-fetch'
 import { getEffectiveProxyUrl } from '../network/proxy-settings-service'
 import { getEnabledTools } from './chat-tool-registry'
 import { executeToolCalls } from './chat-tool-executor'
+import { getModelContextWindow, CONTEXT_USAGE_THRESHOLD } from './model-context-windows'
+import { estimateMessagesTokens, trimMessagesToTarget } from './token-estimator'
 
 /** 活跃的 AbortController 映射（conversationId → controller） */
 const activeControllers = new Map<string, AbortController>()
@@ -124,6 +126,22 @@ async function enrichHistoryWithDocuments(
 
   return enriched
 }
+
+// ===== 上下文限制错误检测 =====
+
+/** 上下文限制错误的关键词匹配模式 */
+const CONTEXT_LIMIT_PATTERNS = [
+  'prompt is too long',
+  'prompt_too_long',
+  'input is too long',
+  'context_length_exceeded',
+  'maximum context length',
+  'token limit',
+  'exceeds the model',
+  'context window limit',
+  'reducing message length',
+  'too many tokens',
+] as const
 
 // ===== 上下文过滤 =====
 
@@ -240,6 +258,29 @@ export async function sendMessage(
   const enrichedHistory = await enrichHistoryWithDocuments(filteredHistory)
   const enrichedUserMessage = await enrichMessageWithDocuments(userMessage, attachments)
 
+  // 5.5 上下文窗口自动裁剪：估算 token，超出阈值时静默裁剪旧消息
+  const contextWindow = getModelContextWindow(modelId)
+  const targetTokens = Math.floor(contextWindow * CONTEXT_USAGE_THRESHOLD)
+  const toolCount = enabledToolIds?.length ?? 0
+  const estimatedTokens = estimateMessagesTokens(
+    enrichedHistory, systemMessage, enrichedUserMessage, toolCount,
+  )
+
+  let finalHistory = enrichedHistory
+  if (estimatedTokens > targetTokens) {
+    const { trimmed, removedCount } = trimMessagesToTarget(
+      enrichedHistory, estimatedTokens, targetTokens,
+      systemMessage, enrichedUserMessage, toolCount,
+    )
+    if (removedCount > 0) {
+      console.log(
+        `[聊天服务] 上下文自动裁剪: 移除 ${removedCount} 条旧消息 ` +
+        `(估算 ${estimatedTokens} tokens → 目标 ${targetTokens}/${contextWindow})`,
+      )
+      finalHistory = trimmed
+    }
+  }
+
   // 6. 创建 AbortController
   const controller = new AbortController()
   activeControllers.set(conversationId, controller)
@@ -313,7 +354,7 @@ export async function sendMessage(
         baseUrl: channel.baseUrl,
         apiKey,
         modelId,
-        history: enrichedHistory,
+        history: finalHistory,
         userMessage: enrichedUserMessage,
         systemMessage: effectiveSystemMessage,
         attachments,
@@ -389,7 +430,7 @@ export async function sendMessage(
         baseUrl: channel.baseUrl,
         apiKey,
         modelId,
-        history: enrichedHistory,
+        history: finalHistory,
         userMessage: enrichedUserMessage,
         systemMessage: effectiveSystemMessage,
         attachments,
@@ -478,8 +519,16 @@ export async function sendMessage(
       return
     }
 
-    const errorMessage = error instanceof Error ? error.message : '未知错误'
+    const rawErrorMessage = error instanceof Error ? error.message : '未知错误'
     console.error(`[聊天服务] 流式请求失败:`, error)
+
+    // 上下文限制错误：替换为中文友好提示
+    const isContextError = CONTEXT_LIMIT_PATTERNS.some(
+      (p) => rawErrorMessage.toLowerCase().includes(p),
+    )
+    const errorMessage = isContextError
+      ? '上下文已超出模型限制。建议减少对话轮数、清除上下文（Ctrl+K），或开启新对话。'
+      : rawErrorMessage
 
     // 保存已累积的部分助手消息（与 abort 逻辑一致，防止内容丢失）
     if (accumulatedContent) {

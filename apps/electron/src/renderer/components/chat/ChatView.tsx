@@ -15,7 +15,7 @@
 
 import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { AlertCircle, X } from 'lucide-react'
+import { AlertCircle, X, Scissors, Plus } from 'lucide-react'
 import { ChatHeader } from './ChatHeader'
 import { ChatMessages } from './ChatMessages'
 import { ChatInput } from './ChatInput'
@@ -76,7 +76,7 @@ function ChatViewInner({ conversationId }: ChatViewProps): React.ReactElement {
 
   // ===== Per-conversation hooks（分屏独立） =====
   const [selectedModel, setSelectedModel] = useConversationModel()
-  const [contextLength] = useConversationContextLength()
+  const [contextLength, setContextLength] = useConversationContextLength()
   const [thinkingEnabled] = useConversationThinkingEnabled()
   const [conversationPromptId] = useConversationPromptId()
 
@@ -589,6 +589,33 @@ function ChatViewInner({ conversationId }: ChatViewProps): React.ReactElement {
             <div className="mx-4 mb-2 px-4 py-2.5 rounded-lg bg-destructive/10 text-destructive text-sm flex items-center gap-2">
               <AlertCircle className="size-4 shrink-0" />
               <span className="flex-1 break-all">{chatError}</span>
+              {chatError.includes('超出模型限制') && (
+                <>
+                  <button
+                    type="button"
+                    className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-destructive/20 hover:bg-destructive/30 transition-colors"
+                    onClick={() => {
+                      setContextLength(10)
+                      setChatStreamErrors((prev) => {
+                        const map = new Map(prev)
+                        map.delete(conversationId)
+                        return map
+                      })
+                    }}
+                  >
+                    <Scissors className="size-3" />
+                    减少上下文
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-destructive/20 hover:bg-destructive/30 transition-colors"
+                    onClick={handleClearContext}
+                  >
+                    <Plus className="size-3 rotate-45" />
+                    清除上下文
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 className="shrink-0 p-0.5 rounded hover:bg-destructive/10 transition-colors"
