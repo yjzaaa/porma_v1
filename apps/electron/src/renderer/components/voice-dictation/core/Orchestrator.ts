@@ -362,15 +362,14 @@ export class Orchestrator {
           // 完成 → 暂时回归 stopped
           this.fsm.transition('stopped')
           this.emit()
-          // 2s 后自动回归 listening（免提模式持续监听下一轮语音）
-          setTimeout(() => {
-            if (this.settings?.handsfreeEnabled) {
-              this.volume = 0; this.transcript = ''; this.message = ''
-              this.fsm.transition('listening')
-              this.emit()
-              this.logger.info('自动回归listening状态，准备下一轮录音')
-            }
-          }, 2000)
+
+          // 🎯 免提模式：立即回归listening（不再等待2秒）
+          if (this.settings?.handsfreeEnabled) {
+            this.logger.info('🔄 免提模式：立即回归listening状态')
+            this.volume = 0; this.transcript = ''; this.message = ''
+            this.fsm.transition('listening')
+            this.emit()
+          }
         },
 
         onError: (m: string) => {
@@ -503,21 +502,14 @@ export class Orchestrator {
         this.logger.warn('⚠️ 没有sessionId，无法打断Agent')
       }
 
-      // 停止当前录音会话
-      this.cancelSession()
-
-      // 🎯 清空转录文本并重置状态
+      // 🎯 清空转录文本并立即停止录音
       this.transcript = ''
       this.message = '已取消'
       this.emit()
-      this.logger.info('📝 清空转录文本并重置状态')
-
-      // 🎯 回到listening状态（免提模式）
-      if (this.settings?.handsfreeEnabled) {
-        this.logger.info('🔄 回到listening状态')
-        this.fsm.transition('listening')
-        this.emit()
-      }
+      this.logger.info('📝 取消操作后清空转录文本，立即停止录音')
+      this.stopRecording().catch(() => {
+        this.logger.warn('停止录音会话失败或已完成')
+      })
 
     } else if (command.includes('停止') || command.includes('停下')) {
       this.logger.info('🛑 执行停止操作 - 打断Agent并停止录音')
@@ -536,21 +528,14 @@ export class Orchestrator {
         this.logger.warn('⚠️ 没有sessionId，无法停止Agent')
       }
 
-      // 停止录音
-      this.stopRecording()
-
-      // 🎯 清空转录文本并重置状态
+      // 🎯 清空转录文本并立即停止录音
       this.transcript = ''
       this.message = '已停止'
       this.emit()
-      this.logger.info('📝 清空转录文本并重置状态')
-
-      // 🎯 回到listening状态（免提模式）
-      if (this.settings?.handsfreeEnabled) {
-        this.logger.info('🔄 回到listening状态')
-        this.fsm.transition('listening')
-        this.emit()
-      }
+      this.logger.info('📝 停止操作后清空转录文本，立即停止录音')
+      this.stopRecording().catch(() => {
+        this.logger.warn('停止录音会话失败或已完成')
+      })
 
     } else {
       this.logger.info('🤔 其他即时指令，执行通用打断逻辑')
@@ -573,18 +558,16 @@ export class Orchestrator {
       // 停止当前录音会话
       this.cancelSession()
 
-      // 🎯 清空转录文本并重置状态
+      // 🎯 清空转录文本并立即停止录音
       this.transcript = ''
       this.message = '指令已执行'
       this.emit()
-      this.logger.info('📝 清空转录文本并重置状态')
+      this.logger.info('📝 清空转录文本，立即停止录音')
 
-      // 🎯 回到listening状态（免提模式）
-      if (this.settings?.handsfreeEnabled) {
-        this.logger.info('🔄 回到listening状态')
-        this.fsm.transition('listening')
-        this.emit()
-      }
+      // 🎯 立即停止录音会话（会触发onComplete，自动回到listening）
+      this.stopRecording().catch(() => {
+        this.logger.warn('停止录音会话失败或已完成')
+      })
     }
 
     this.logger.info('✅ 即时指令处理完成')
@@ -628,24 +611,16 @@ export class Orchestrator {
         reasoning
       })
 
-      // 🎯 发送后清空转录文本并重置状态
+      // 🎯 发送后清空转录文本并立即停止录音
       this.transcript = ''
       this.message = '已发送'
       this.emit()
-      this.logger.info('📝 清空转录文本并重置状态')
+      this.logger.info('📝 发送后清空转录文本，立即停止录音')
 
-      // 🎯 停止当前录音会话（如果还在录音）
-      if (this.session) {
-        this.logger.info('🛑 停止录音会话')
-        this.cancelSession()
-      }
-
-      // 🎯 回到listening状态（免提模式）
-      if (this.settings?.handsfreeEnabled) {
-        this.logger.info('🔄 回到listening状态')
-        this.fsm.transition('listening')
-        this.emit()
-      }
+      // 🎯 立即停止录音会话（会触发onComplete，自动回到listening）
+      this.stopRecording().catch(() => {
+        this.logger.warn('停止录音会话失败或已完成')
+      })
 
     } catch (error) {
       this.logger.error('❌ 发送语音到Agent失败', {
