@@ -29,6 +29,7 @@
 import { AudioHub } from './AudioHub'
 import { StateMachine } from './StateMachine'
 import { Session } from './Session'
+import { createASRProvider } from '../asr/factory'
 import type { PcmFrame, PanelState, UIStateListener, VoiceUIState } from '../types/panel'
 import type { VoiceDictationSettings } from '../../../../types'
 
@@ -225,45 +226,53 @@ export class Orchestrator {
     this.transcript = ''; this.message = '正在监听...'
     this.emit()
 
-    const session = new Session(this.hub, this.settings, {
-      onVolume: (p: number) => { this.volume = p; this.emit() },
-      onTranscript: (t: string) => { this.transcript = t; this.emit() },
-      onMetadata: (m: string) => { this.message = m; this.emit() },
-      onComplete: (result) => {
-        this.session = null
-        this.message = result.commitMessage
-        this.emit()
+    const engine = this.settings.engine || 'doubao'
+    const provider = createASRProvider(engine)
 
-        // 自动发送转写文本到 Agent/Chat 会话
-        if (result.text) {
-          this.onAutoSend?.(result.text)
-        }
-
-        // 完成 → 暂时回归 stopped
-        this.fsm.transition('stopped')
-        this.emit()
-        // 2s 后自动回归 listening（免提模式持续监听下一轮语音）
-        setTimeout(() => {
-          if (this.settings?.handsfreeEnabled) {
-            this.volume = 0; this.transcript = ''; this.message = ''
-            this.fsm.transition('listening')
-            this.emit()
-          }
-        }, 2000)
-      },
-      onError: (m: string) => {
-        this.session = null
-        this.fsm.transition('error')
-        this.message = m
-        this.emit()
-        // 2s 后自动恢复
-        setTimeout(() => {
-          this.fsm.transition('stopped')
-          if (this.settings?.handsfreeEnabled) this.fsm.transition('listening')
+    const session = new Session(
+      (sub) => this.hub.subscribe(sub),
+      provider,
+      this.settings,
+      {
+        onVolume: (p: number) => { this.volume = p; this.emit() },
+        onTranscript: (t: string) => { this.transcript = t; this.emit() },
+        onMetadata: (m: string) => { this.message = m; this.emit() },
+        onComplete: (result) => {
+          this.session = null
+          this.message = result.commitMessage
           this.emit()
-        }, 2000)
+
+          // 自动发送转写文本到 Agent/Chat 会话
+          if (result.text) {
+            this.onAutoSend?.(result.text)
+          }
+
+          // 完成 → 暂时回归 stopped
+          this.fsm.transition('stopped')
+          this.emit()
+          // 2s 后自动回归 listening（免提模式持续监听下一轮语音）
+          setTimeout(() => {
+            if (this.settings?.handsfreeEnabled) {
+              this.volume = 0; this.transcript = ''; this.message = ''
+              this.fsm.transition('listening')
+              this.emit()
+            }
+          }, 2000)
+        },
+        onError: (m: string) => {
+          this.session = null
+          this.fsm.transition('error')
+          this.message = m
+          this.emit()
+          // 2s 后自动恢复
+          setTimeout(() => {
+            this.fsm.transition('stopped')
+            if (this.settings?.handsfreeEnabled) this.fsm.transition('listening')
+            this.emit()
+          }, 2000)
+        },
       },
-    })
+    )
 
     this.session = session
     session.start().catch(() => {})

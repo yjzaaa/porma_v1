@@ -6,23 +6,26 @@
  *
  * 关键契约：
  *   - 每轮录音一个独立 Session 实例，不跨轮泄漏状态
- *   - start() 时订阅 AudioHub PCM 帧做 VAD 静音检测
+ *   - VAD 静音检测通过订阅 PCM 帧函数实现（由 Orchestrator 注入 AudioHub.subscribe）
+ *   - ASR Provider 由外部注入（依赖倒置），Session 不直接创建或引用 ASR 实现
  *   - 静音超过 vadStopTimeoutMs 自动触发 stop()
  *   - 转写输出通过 IPC commitVoiceDictation 提交到主进程
  *   - dispose() 必须是幂等的，可多次安全调用
  *
- * @see AudioHub - PCM 帧来源
- * @see createASRProvider - ASR 引擎创建
- * @see ../types/panel.ts - SessionCallbacks / SessionResult 定义
+ * 依赖注入（所有依赖在构造函数中传入，不自行 import）：
+ *   - subscribe: PCM 帧订阅函数 → 由 Orchestrator 绑定 AudioHub.subscribe
+ *   - provider: ASRProvider 实例 → 由 Orchestrator 通过 createASRProvider 创建
+ *   - settings: VoiceDictationSettings → 当前语音配置
+ *   - callbacks: SessionCallbacks → Orchestrator 回调
+ *
+ * @see ../types/panel.ts - PcmSubscriber / SessionCallbacks / SessionResult 定义
+ * @see ../types/asr.ts - ASRProvider 接口
  */
 
-import type { PcmFrame } from '../types/panel'
+import type { PcmFrame, PcmSubscriber } from '../types/panel'
 import type { SessionCallbacks, SessionResult } from '../types/panel'
-import type { AudioHub } from './AudioHub'
-import { createASRProvider } from '../asr/factory'
 import type { ASRProvider } from '../types/asr'
 import type { VoiceDictationSettings } from '../../../../types'
-import { CHUNK_BYTES, concatAudioBuffers, splitChunk } from '../utils/pcm'
 
 export class Session {
   /** ASR Provider 引用 */
@@ -43,10 +46,13 @@ export class Session {
   private _completed = false
 
   constructor(
-    private hub: AudioHub,
+    private subscribe: (sub: PcmSubscriber) => () => void,
+    provider: ASRProvider,
     private settings: VoiceDictationSettings,
     private callbacks: SessionCallbacks,
-  ) {}
+  ) {
+    this.provider = provider
+  }
 
   /** 是否已释放 */
   get disposed() { return this._disposed }
@@ -55,9 +61,9 @@ export class Session {
    * 启动录音会话
    *
    * 流程：
-   *   1. 订阅 AudioHub PCM 帧 → 实时音量回调 + VAD 静音检测
+   *   1. 订阅 PCM 帧 → 实时音量回调 + VAD 静音检测
    *   2. 记录录音开始时间
-   *   3. 创建 ASR Provider 并启动识别
+   *   3. 启动已注入的 ASR Provider
    *
    * VAD 静音检测逻辑：
    *   - peak < 0.01 → 视为静音
@@ -67,7 +73,7 @@ export class Session {
     if (this._disposed) return
 
     // 订阅 PCM 帧 → 实时音量 + 静音检测
-    this.subs.push(this.hub.subscribe((frame: PcmFrame) => {
+    this.subs.push(this.subscribe((frame: PcmFrame) => {
       if (this._disposed) return
       this.callbacks.onVolume(frame.peak)
 
@@ -88,11 +94,11 @@ export class Session {
     this.recordingStartedAt = performance.now()
     this.silenceSince = this.recordingStartedAt
 
-    const engine = this.settings.engine || 'doubao'
-    this.provider = createASRProvider(engine)
+    const provider = this.provider
+    if (!provider) return
 
     try {
-      await this.provider.start({
+      await provider.start({
         onTranscript: (text: string) => {
           if (this._disposed) return
           this.transcript = text
