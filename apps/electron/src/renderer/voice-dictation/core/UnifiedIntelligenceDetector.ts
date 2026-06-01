@@ -148,7 +148,7 @@ export class UnifiedIntelligenceDetector {
    * 即时指令检测（通用）
    */
   isImmediateCommand(text: string): boolean {
-    const immediateCommands = ['撤销', '停止', '取消', '重新开始', '不要这样', '停下', '等等']
+    const immediateCommands = ['撤销', '停止', '取消', '重新开始', '不要这样', '停下', '等等', '打断', '中断', '暂停']
     const isCommand = immediateCommands.some(cmd => text.includes(cmd))
 
     if (isCommand) {
