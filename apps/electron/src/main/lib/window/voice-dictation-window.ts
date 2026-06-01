@@ -9,7 +9,7 @@ import { join } from 'path'
 import { VOICE_DICTATION_IPC_CHANNELS } from '../../../types'
 import { getSettings, updateSettings } from '../storage/settings-service'
 import { captureVoiceDictationTarget } from '../text/text-output-service'
-import { getMainWindow, isMainWindow } from '../../index'
+import { getMainWindow } from '../../index'
 
 let voiceDictationWindow: BrowserWindow | null = null
 let voiceDictationTargetCaptured = false
