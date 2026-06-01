@@ -140,7 +140,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
                 content: currentSessionState.content || '',
                 toolActivities: currentSessionState.toolActivities?.map(t => t.toolName) || []
               },
-              hasError: false,
+              hasError: false, // AgentStreamState中没有错误字段，暂时设为false
               recentMessages: [],
               lastUserMessageTime: Date.now()
             })

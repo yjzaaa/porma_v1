@@ -139,10 +139,10 @@ export class AgentStateMonitor {
    * 检查是否有活跃的流式处理
    */
   private hasActiveStreaming(): boolean {
-    // 这里应该检查实际的Agent流式状态
-    // 暂时返回false
-    this.logger.debug('检查活跃流式状态', { hasActive: false })
-    return false
+    // 检查实际的Agent流式状态
+    const hasActive = this.currentState.streamingState.running
+    this.logger.debug('检查活跃流式状态', { hasActive, running: this.currentState.streamingState.running })
+    return hasActive
   }
   
   /**
