@@ -22,15 +22,22 @@
 import type { ASRProvider, ASRCallbacks } from '../types/asr'
 import type { VoiceDictationSettings, VoiceDictationStateEvent, VoiceDictationTranscriptEvent } from '../../../../types'
 import { CHUNK_BYTES, concatAudioBuffers, floatTo16BitPcm, splitChunk } from '../utils/pcm'
+import { createLogger } from '../../../voice-dictation/utils/logger'
 
 /** AudioContext 引用（兼容 WebKit 前缀） */
 const ACTX = (window as any).AudioContext ?? (window as any).webkitAudioContext as typeof AudioContext | undefined
 
 export class DoubaoProvider implements ASRProvider {
+  /** 日志工具 */
+  private logger = createLogger('豆包ASR')
   /** 当前 ASR 会话 ID（用于 IPC 消息隔离） */
   private sessionId: string | null = null
   /** 主进程 ASR 是否就绪（startVoiceDictation 成功返回后为 true） */
   private asrReady = false
+  /** 当前definite状态 */
+  private currentDefinite?: boolean
+  /** utterances信息 */
+  private currentUtterances?: Array<{text: string, definite: boolean}>
   /** 麦克风 MediaStream */
   private stream: MediaStream | null = null
   /** 音频上下文 */
@@ -91,6 +98,17 @@ export class DoubaoProvider implements ASRProvider {
 
     const ct = window.electronAPI.onVoiceDictationTranscript((e: VoiceDictationTranscriptEvent) => {
       if (e.sessionId !== this.sessionId) return
+      
+      // 提取utterances信息
+      if (e.metadata?.utterances) {
+        this.currentUtterances = e.metadata.utterances
+        this.currentDefinite = e.metadata.utterances.some((u: any) => u.definite === true)
+        this.logger.debug('豆包ASR utterances更新', { 
+          utterances: e.metadata.utterances,
+          definite: this.currentDefinite 
+        })
+      }
+      
       this.transcriptText = e.text
       callbacks.onTranscript(e.text, e.isFinal)
     })
@@ -220,6 +238,25 @@ export class DoubaoProvider implements ASRProvider {
     this.pendingAudio = []
   }
 
+  /**
+   * 获取当前识别的详细信息
+   */
+  getCurrentRecognitionDetails(): {
+    text: string
+    isFinal: boolean
+    confidence: number
+    definite?: boolean
+    utterances?: Array<{text: string, definite: boolean}>
+  } {
+    return {
+      text: this.transcriptText,
+      isFinal: false, // 豆包ASR在onend时才确定最终
+      confidence: 0.8, // 置信度可以取自result.confidence
+      definite: this.currentDefinite,
+      utterances: this.currentUtterances
+    }
+  }
+
   /** 释放所有资源（幂等） */
   dispose(): void {
     this.cleanupListeners?.()
@@ -229,5 +266,7 @@ export class DoubaoProvider implements ASRProvider {
     this.sessionId = null
     this.asrReady = false
     this.callbacks = null
+    this.currentDefinite = undefined
+    this.currentUtterances = undefined
   }
 }

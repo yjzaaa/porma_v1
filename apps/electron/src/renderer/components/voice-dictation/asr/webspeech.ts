@@ -18,6 +18,7 @@
  */
 
 import type { ASRProvider, ASRCallbacks } from '../types/asr'
+import { createLogger } from '../../../voice-dictation/utils/logger'
 
 /** Web Speech API 类型 shim（TS 内置类型中未完整包含） */
 interface SpeechRecognition_ {
@@ -38,6 +39,8 @@ const SpeechCtor = ((window as any).SpeechRecognition ?? (window as any).webkitS
   (new () => SpeechRecognition_) | undefined
 
 export class WebSpeechProvider implements ASRProvider {
+  /** 日志工具 */
+  private logger = createLogger('WebSpeech')
   /** 当前 Recognition 实例 */
   private recognition: SpeechRecognition_ | null = null
   /** 外部回调引用 */
@@ -76,12 +79,41 @@ export class WebSpeechProvider implements ASRProvider {
     r.onresult = (ev: any) => {
       if (this.disposed) return
       let final = '', interim = ''
+
+      this.logger.debug('WebSpeech onresult事件', {
+        resultIndex: ev.resultIndex,
+        resultsLength: ev.results.length
+      })
+
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const res = ev.results[i]; if (!res) continue
         const t = res[0]?.transcript ?? ''
-        if (res.isFinal) { final += t; this.finalText += t } else { interim += t }
+        if (res.isFinal) {
+          final += t
+          this.finalText += t
+          this.logger.debug('最终文本追加', { text: t })
+        } else {
+          interim += t
+          this.logger.debug('临时文本追加', { text: t })
+        }
       }
-      if (final || interim) this.callbacks?.onTranscript(this.finalText + interim, !interim)
+
+      // 检测临时文本的完整性（启发式增强）
+      const interimComplete = this.checkInterimCompleteness(interim)
+
+      if (final || interim) {
+        const enhancedResult = this.finalText + interim
+        const isEnhancedFinal = !interim && interimComplete
+
+        this.logger.info('WebSpeech结果增强', {
+          enhancedResult: enhancedResult.substring(0, 20) + '...',
+          isEnhancedFinal,
+          finalLength: final.length,
+          interimLength: interim.length
+        })
+
+        this.callbacks?.onTranscript(enhancedResult, isEnhancedFinal)
+      }
     }
 
     r.onerror = (ev: any) => {
@@ -119,6 +151,52 @@ export class WebSpeechProvider implements ASRProvider {
     this.disposed = true
     try { this.recognition?.abort() } catch {}
     this.recognition = null; this.callbacks = null
+  }
+
+  /**
+   * 检查临时文本的完整性（启发式增强）
+   *
+   * WebSpeech相比豆包ASR能力基础，通过启发式规则增强完整性判断：
+   * - 句末标点检测：。！？.!?
+   * - 长度检测：超过20字符且无逗号判定为完整
+   * - 问句和感叹句检测：？?！!
+   */
+  private checkInterimCompleteness(interim: string): boolean {
+    const trimmed = interim.trim()
+
+    if (!trimmed) {
+      this.logger.debug('临时文本为空，不完整')
+      return false
+    }
+
+    this.logger.debug('开始临时文本完整性检测', { text: trimmed.substring(0, 20) + '...' })
+
+    // 句末标点检测
+    if (/[。！？.!?]$/.test(trimmed)) {
+      this.logger.debug('检测到句末标点，判定为完整')
+      return true
+    }
+
+    // 长度检测
+    if (trimmed.length > 20 && !/[,，]$/.test(trimmed)) {
+      this.logger.debug('检测到长句子且无逗号，判定为完整', { length: trimmed.length })
+      return true
+    }
+
+    // 问句检测
+    if (/[？?]$/.test(trimmed)) {
+      this.logger.debug('检测到问句，判定为完整')
+      return true
+    }
+
+    // 感叹号检测
+    if (/[！!]$/.test(trimmed)) {
+      this.logger.debug('检测到感叹句，判定为完整')
+      return true
+    }
+
+    this.logger.debug('临时文本完整性检测未通过')
+    return false
   }
 }
 

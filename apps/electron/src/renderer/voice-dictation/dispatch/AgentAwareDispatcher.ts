@@ -314,6 +314,11 @@ export class AgentAwareDispatcher {
 
     const lastMessage = recentMessages[recentMessages.length - 1]
 
+    if (!lastMessage) {
+      this.logger.debug('无最近消息，非问题回复')
+      return false
+    }
+
     // Agent最后发送了问题 → 用户可能在回答
     if (lastMessage.includes('?') || lastMessage.includes('？')) {
       this.logger.debug('检测到问题回复', { lastMessage: lastMessage.substring(0, 20) + '...' })

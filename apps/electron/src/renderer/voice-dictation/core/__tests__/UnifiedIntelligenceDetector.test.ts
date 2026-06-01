@@ -18,11 +18,12 @@ describe('UnifiedIntelligenceDetector', () => {
           text: '你好世界',
           isFinal: false,
           confidence: 0.95,
+          isComplete: true,
           metadata: {
             definite: true,
             utterances: [
-              { text: '你好', definite: true, confidence: 0.9 },
-              { text: '世界', definite: true, confidence: 0.95 }
+              { text: '你好', definite: true },
+              { text: '世界', definite: true }
             ]
           }
         }
@@ -71,6 +72,7 @@ describe('UnifiedIntelligenceDetector', () => {
       test('应通过isFinal + 句末标点识别完整语音', () => {
         const result: UnifiedASRResult = {
           asrType: 'webspeech',
+          isComplete: true,
           text: '你好世界。',
           isFinal: true,
           confidence: 0.9,
@@ -84,6 +86,7 @@ describe('UnifiedIntelligenceDetector', () => {
       test('应通过长句子识别完整语音', () => {
         const result: UnifiedASRResult = {
           asrType: 'webspeech',
+          isComplete: true,
           text: '这是一个非常长的句子，应该被识别为完整的语音输入',
           isFinal: true,
           confidence: 0.85,
@@ -97,6 +100,7 @@ describe('UnifiedIntelligenceDetector', () => {
       test('应通过问句识别完整语音', () => {
         const result: UnifiedASRResult = {
           asrType: 'webspeech',
+          isComplete: true,
           text: '你好吗？',
           isFinal: true,
           confidence: 0.9,
@@ -110,6 +114,7 @@ describe('UnifiedIntelligenceDetector', () => {
       test('应通过感叹句识别完整语音', () => {
         const result: UnifiedASRResult = {
           asrType: 'webspeech',
+          isComplete: true,
           text: '太棒了！',
           isFinal: true,
           confidence: 0.9,
@@ -123,6 +128,7 @@ describe('UnifiedIntelligenceDetector', () => {
       test('应识别不完整的语音', () => {
         const result: UnifiedASRResult = {
           asrType: 'webspeech',
+          isComplete: true,
           text: '你好',
           isFinal: true,
           confidence: 0.8,
@@ -136,6 +142,7 @@ describe('UnifiedIntelligenceDetector', () => {
       test('未达到isFinal条件时应返回false', () => {
         const result: UnifiedASRResult = {
           asrType: 'webspeech',
+          isComplete: true,
           text: '你好世界',
           isFinal: false,
           confidence: 0.8,
@@ -208,6 +215,7 @@ describe('UnifiedIntelligenceDetector', () => {
   describe('makeIntelligentDecision', () => {
     const createASRResult = (text: string, isFinal: boolean = true): UnifiedASRResult => ({
       asrType: 'webspeech',
+          isComplete: true,
       text,
       isFinal,
       confidence: 0.9,
@@ -313,6 +321,7 @@ describe('UnifiedIntelligenceDetector', () => {
     test('应识别句末句号', () => {
       const result = detector.isSpeechComplete({
         asrType: 'webspeech',
+          isComplete: true,
         text: '你好。',
         isFinal: true,
         confidence: 0.9,
@@ -325,6 +334,7 @@ describe('UnifiedIntelligenceDetector', () => {
     test('应识别句末问号', () => {
       const result = detector.isSpeechComplete({
         asrType: 'webspeech',
+          isComplete: true,
         text: '你好吗？',
         isFinal: true,
         confidence: 0.9,
@@ -337,6 +347,7 @@ describe('UnifiedIntelligenceDetector', () => {
     test('应识别句末感叹号', () => {
       const result = detector.isSpeechComplete({
         asrType: 'webspeech',
+          isComplete: true,
         text: '太棒了！',
         isFinal: true,
         confidence: 0.9,
@@ -351,6 +362,7 @@ describe('UnifiedIntelligenceDetector', () => {
 
       const result = detector.isSpeechComplete({
         asrType: 'webspeech',
+          isComplete: true,
         text: longText,
         isFinal: true,
         confidence: 0.9,
@@ -363,6 +375,7 @@ describe('UnifiedIntelligenceDetector', () => {
     test('应以逗号结尾的短句子为不完整', () => {
       const result = detector.isSpeechComplete({
         asrType: 'webspeech',
+          isComplete: true,
         text: '你好，',
         isFinal: true,
         confidence: 0.9,
@@ -375,6 +388,7 @@ describe('UnifiedIntelligenceDetector', () => {
     test('问句即使没有句末标点也应被识别', () => {
       const result = detector.isSpeechComplete({
         asrType: 'webspeech',
+          isComplete: true,
         text: '你好吗',
         isFinal: true,
         confidence: 0.9,
@@ -390,6 +404,7 @@ describe('UnifiedIntelligenceDetector', () => {
     test('长消息应被识别为重要', () => {
       const asrResult: UnifiedASRResult = {
         asrType: 'webspeech',
+          isComplete: true,
         text: '这是一个比较长的消息，超过了十五个字符的限制，应该被识别为完整的语音输入。',
         isFinal: true,
         confidence: 0.9,
@@ -412,6 +427,7 @@ describe('UnifiedIntelligenceDetector', () => {
       keywords.forEach(keyword => {
         const asrResult: UnifiedASRResult = {
           asrType: 'webspeech',
+          isComplete: true,
           text: `这是一个${keyword}的消息，需要立即处理。`,
           isFinal: true,
           confidence: 0.9,
@@ -432,6 +448,7 @@ describe('UnifiedIntelligenceDetector', () => {
     test('短消息且无关键词不应被识别为重要', () => {
       const asrResult: UnifiedASRResult = {
         asrType: 'webspeech',
+          isComplete: true,
         text: '你好。',
         isFinal: true,
         confidence: 0.9,
@@ -456,6 +473,7 @@ describe('UnifiedIntelligenceDetector', () => {
       criticalTools.forEach(tool => {
         const asrResult: UnifiedASRResult = {
           asrType: 'webspeech',
+          isComplete: true,
           text: '这是一个重要的消息，需要立即处理。',
           isFinal: true,
           confidence: 0.9,
@@ -479,6 +497,7 @@ describe('UnifiedIntelligenceDetector', () => {
       nonCriticalTools.forEach(tool => {
         const asrResult: UnifiedASRResult = {
           asrType: 'webspeech',
+          isComplete: true,
           text: '这是一个重要的消息，需要立即处理。',
           isFinal: true,
           confidence: 0.9,

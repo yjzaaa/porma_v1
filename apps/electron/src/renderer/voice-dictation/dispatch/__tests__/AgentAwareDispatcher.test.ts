@@ -132,7 +132,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: ['Agent正在思考中...'],
         activeToolCalls: ['tool1', 'tool2'],
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }
@@ -160,7 +160,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: [],
         activeToolCalls: [],
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }
@@ -187,7 +187,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: ['请问生命的意义是什么？'], // Agent之前问了问题
         activeToolCalls: ['busyTool'], // Agent正在执行工具，确保会排队
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }
@@ -214,7 +214,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: [],
         activeToolCalls: ['busyTool'], // Agent正在执行工具，确保会排队
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now() - 20000 // 20秒前
       }
@@ -246,7 +246,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: [],
         activeToolCalls: ['busyTool'],
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }
@@ -272,7 +272,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: [],
         activeToolCalls: [],
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }
@@ -298,7 +298,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: [],
         activeToolCalls: [],
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }
@@ -331,7 +331,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: [],
         activeToolCalls: [],
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }
@@ -354,7 +354,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: [],
         activeToolCalls: [],
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }
@@ -364,14 +364,14 @@ describe('AgentAwareDispatcher', () => {
           content: '消息1',
           timestamp: Date.now(),
           priority: 50,
-          agentState: AgentLoopState.RUNNING_TOOL,
+          agentState: AgentLoopState.TOOL_EXECUTING,
           agentContext
         },
         {
           content: '消息2',
           timestamp: Date.now(),
           priority: 70,
-          agentState: AgentLoopState.RUNNING_TOOL,
+          agentState: AgentLoopState.TOOL_EXECUTING,
           agentContext
         }
       )
@@ -405,7 +405,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: ['你今天吃什么？'],
         activeToolCalls: [],
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }
@@ -549,7 +549,7 @@ describe('AgentAwareDispatcher', () => {
         state: 'processing',
         recentMessages: [],
         activeToolCalls: [],
-        loopState: AgentLoopState.RUNNING_TOOL,
+        loopState: AgentLoopState.TOOL_EXECUTING,
         canAcceptInput: false,
         lastUserMessageTime: Date.now()
       }

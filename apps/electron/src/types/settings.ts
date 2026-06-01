@@ -87,6 +87,14 @@ export interface VoiceDictationTranscriptEvent {
   sessionId: string
   text: string
   isFinal: boolean
+  /** 元数据，包含utterances等详细信息 */
+  metadata?: {
+    /** utterances信息，包含各个候选结果及其definite状态 */
+    utterances?: Array<{
+      text: string
+      definite: boolean
+    }>
+  }
 }
 
 /** 语音输入状态事件 */

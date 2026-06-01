@@ -302,6 +302,26 @@ export class Orchestrator {
             reasoning: decision.reasoning
           })
 
+          // 🎯 根据决策结果更新UI状态
+          if (decision.sendStrategy === 'continue') {
+            this.message = '语音识别中...'
+          } else if (decision.sendStrategy === 'interrupt') {
+            this.message = '检测到即时指令'
+          } else if (decision.sendStrategy === 'immediate') {
+            this.message = '正在发送...'
+          } else if (decision.sendStrategy === 'wait') {
+            this.message = '等待Agent空闲...'
+          } else {
+            this.message = decision.reasoning
+          }
+
+          // 🎯 再次emit确保UI能及时反映智能决策结果
+          this.emit()
+          this.logger.debug('智能决策后emit状态', {
+            message: this.message,
+            sendStrategy: decision.sendStrategy
+          })
+
           // 根据决策结果处理
           if (decision.shouldSend) {
             if (decision.sendStrategy === 'interrupt') {
