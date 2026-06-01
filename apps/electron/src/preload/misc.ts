@@ -103,6 +103,7 @@ const api: Record<string, unknown> = {
 
   checkMicrophonePermission: () => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.CHECK_MIC_PERMISSION),
   requestMicrophonePermission: () => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.REQUEST_MIC_PERMISSION),
+  writeVoiceDictationLog: (logContent: string) => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.WRITE_LOG, logContent),
 
   // ===== 菜单栏 =====
   onTrayOpenAgentSession: (callback: (data: TrayOpenAgentSessionData) => void) => {

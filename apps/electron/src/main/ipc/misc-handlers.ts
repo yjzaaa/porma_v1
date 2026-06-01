@@ -328,6 +328,28 @@ export function registerMiscHandlers(): void {
     }
   )
 
+  ipcMain.handle(
+    VOICE_DICTATION_IPC_CHANNELS.WRITE_LOG,
+    async (_, logContent: string): Promise<void> => {
+      const { appendFileSync, existsSync, mkdirSync } = await import('node:fs')
+      const { join } = await import('node:path')
+      const { app } = await import('electron')
+
+      try {
+        const logDir = join(app.getPath('userData'), 'logs')
+        if (!existsSync(logDir)) {
+          mkdirSync(logDir, { recursive: true })
+        }
+
+        const logFile = join(logDir, 'voice-dictation.log')
+        const timestamp = new Date().toISOString()
+        appendFileSync(logFile, `[${timestamp}] ${logContent}\n`, 'utf-8')
+      } catch (error) {
+        console.error('[语音听写] 写入日志文件失败:', error)
+      }
+    }
+  )
+
   // ===== 数据迁移 =====
 
   ipcMain.handle('migration:getExportPreview', async (_, workspaceId: string) => {

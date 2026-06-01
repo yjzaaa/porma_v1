@@ -357,6 +357,8 @@ export const VOICE_DICTATION_IPC_CHANNELS = {
   GET_HANDSFREE_BUFFER: 'voice-dictation:get-handsfree-buffer',
   /** 免提/语音状态广播到主窗口（语音浮窗 → 主进程 → 主窗口） */
   BROADCAST_STATE_TO_MAIN: 'voice-dictation:broadcast-state-to-main',
+  /** 写入语音听写日志到文件 */
+  WRITE_LOG: 'voice-dictation:write-log',
 } as const
 
 /** 快速任务提交输入 */

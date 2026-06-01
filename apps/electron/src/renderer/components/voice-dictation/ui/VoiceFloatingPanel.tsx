@@ -88,6 +88,9 @@ export function VoiceFloatingPanel(): React.ReactElement {
 
       if (!sessionId || !channelId) return
 
+      // 🎯 智能决策已经在Orchestrator中处理，这里直接发送
+      // Orchestrator.makeIntelligentDecision会判断是否应该发送
+
       // 清除草稿
       store.set(agentSessionDraftsAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
       store.set(agentSessionDraftHtmlAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })

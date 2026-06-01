@@ -341,6 +341,7 @@ export interface ElectronAPI {
   onVoiceDictationBroadcastState: (callback: (data: { visible: boolean }) => void) => () => void
   checkMicrophonePermission: () => Promise<import('../types').MicPermissionResult>
   requestMicrophonePermission: () => Promise<import('../types').MicPermissionResult>
+  writeVoiceDictationLog: (logContent: string) => Promise<void>
 
   onTrayOpenAgentSession: (callback: (data: import('../types').TrayOpenAgentSessionData) => void) => () => void
   onTrayCreateSession: (callback: (data: import('../types').TrayCreateSessionData) => void) => () => void
