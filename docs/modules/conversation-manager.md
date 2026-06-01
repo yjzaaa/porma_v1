@@ -1,4 +1,4 @@
-# conversation-manager.ts — 对话管理器
+自，如果可以的话，我想投给这个俱乐部。# conversation-manager.ts — 对话管理器
 
 > **代码位置**: `apps/electron/src/main/lib/conversation/conversation-manager.ts`
 > **代码行数**: ~483 行
