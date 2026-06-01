@@ -55,6 +55,9 @@ export class Orchestrator {
 
   /** 当前活跃的 Session（录音会话），无录音时为 null */
   private session: Session | null = null
+
+  /** 🎯 当前Agent会话ID（用于打断操作） */
+  private currentAgentSessionId: string | null = null
   /** 当前语音设置快照 */
   private settings: VoiceDictationSettings | null = null
   /** UI 状态监听器集合 */
@@ -455,32 +458,60 @@ export class Orchestrator {
   }
 
   /**
-   * 处理即时指令
+   * 🎯 处理即时指令（真正打断Agent执行）
    *
    * 当检测到即时指令（如"撤销"、"停止"等）时的特殊处理逻辑
    */
   private handleImmediateCommand(command: string, reasoning: string): void {
-    this.logger.warn('处理即时指令', { command, reasoning })
-
-    // TODO: 集成实际的即时指令处理逻辑
-    // 这里可以调用Agent感知发送器的interruptAndHandle方法
-    // 或者直接通知UI层进行特殊处理
+    this.logger.warn('🚨 处理即时指令 - 准备打断Agent', { command, reasoning })
 
     // 示例：根据不同的指令类型执行不同的操作
     if (command.includes('撤销') || command.includes('取消')) {
-      this.logger.info('执行取消操作')
-      // 取消当前录音会话
+      this.logger.info('🚫 执行取消操作 - 打断Agent并停止录音')
+
+      // 🎯 真正打断Agent执行
+      if (this.currentAgentSessionId) {
+        this.logger.info('🎯 调用stopAgent打断Agent', { sessionId: this.currentAgentSessionId })
+        window.electronAPI.stopAgent(this.currentAgentSessionId).catch((error) => {
+          this.logger.error('❌ 打断Agent失败', {
+            error: error instanceof Error ? error.message : '未知错误',
+            sessionId: this.currentAgentSessionId
+          })
+        })
+        this.logger.info('✅ Agent已被打断')
+      } else {
+        this.logger.warn('⚠️ 没有sessionId，无法打断Agent')
+      }
+
+      // 停止当前录音会话
       this.cancelSession()
+
     } else if (command.includes('停止') || command.includes('停下')) {
-      this.logger.info('执行停止操作')
-      // 停止录音并处理
+      this.logger.info('🛑 执行停止操作 - 打断Agent并停止录音')
+
+      // 🎯 真正打断Agent执行
+      if (this.currentAgentSessionId) {
+        this.logger.info('🎯 调用stopAgent停止Agent', { sessionId: this.currentAgentSessionId })
+        window.electronAPI.stopAgent(this.currentAgentSessionId).catch((error) => {
+          this.logger.error('❌ 停止Agent失败', {
+            error: error instanceof Error ? error.message : '未知错误',
+            sessionId: this.currentAgentSessionId
+          })
+        })
+        this.logger.info('✅ Agent已被停止')
+      } else {
+        this.logger.warn('⚠️ 没有sessionId，无法停止Agent')
+      }
+
+      // 停止录音
       this.stopRecording()
+
     } else {
-      this.logger.info('其他即时指令，准备特殊处理')
+      this.logger.info('🤔 其他即时指令，准备特殊处理')
       // 其他即时指令的处理逻辑
     }
 
-    this.logger.info('即时指令处理完成')
+    this.logger.info('✅ 即时指令处理完成')
   }
 
   /**
@@ -538,5 +569,22 @@ export class Orchestrator {
     this.logger.debug('最近消息已添加', {
       message: message.substring(0, 20) + '...'
     })
+  }
+
+  /**
+   * 🎯 设置当前Agent会话ID（由外部调用）
+   *
+   * 允许外部组件设置当前Agent会话ID，用于打断操作
+   */
+  setCurrentAgentSessionId(sessionId: string | null): void {
+    this.currentAgentSessionId = sessionId
+    this.logger.debug('Agent会话ID已更新', { sessionId })
+  }
+
+  /**
+   * 🎯 获取当前Agent会话ID
+   */
+  getCurrentAgentSessionId(): string | null {
+    return this.currentAgentSessionId
   }
 }
