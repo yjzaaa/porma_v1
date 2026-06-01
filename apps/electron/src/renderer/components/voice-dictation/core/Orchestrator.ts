@@ -22,6 +22,7 @@
  *                                           stopped ←──┘
  *
  * @see AudioHub - PCM 帧来源
+ * @see VADDetector - 自适应语音活动检测
  * @see StateMachine - 状态转换守卫
  * @see Session - 单次录音会话
  */
@@ -29,6 +30,7 @@
 import { AudioHub } from './AudioHub'
 import { StateMachine } from './StateMachine'
 import { Session } from './Session'
+import { VADDetector } from './VADDetector'
 import { createASRProvider } from '../asr/factory'
 import type { PcmFrame, PanelState, UIStateListener, VoiceUIState } from '../types/panel'
 import type { VoiceDictationSettings } from '../../../../types'
@@ -38,6 +40,8 @@ export class Orchestrator {
   readonly hub = new AudioHub()
   /** 状态机：6 状态严格守卫 */
   readonly fsm = new StateMachine()
+  /** 自适应语音活动检测器 */
+  readonly vad = new VADDetector()
   /** 当前活跃的 Session（录音会话），无录音时为 null */
   private session: Session | null = null
   /** 当前语音设置快照 */
@@ -63,13 +67,6 @@ export class Orchestrator {
   private transcript = ''
   /** 当前状态描述消息 */
   private message = ''
-
-  // ██ VAD 检测状态 ██
-
-  /** 连续满足能量阈值的 PCM 帧计数 */
-  private consecutiveFrames = 0
-  /** 最近一次触发录音的时间戳（防抖 2s） */
-  private lastTrigger = 0
 
   /**
    * 广播当前 UI 状态给所有监听器
@@ -117,6 +114,7 @@ export class Orchestrator {
    */
   async enableHandsfree(): Promise<void> {
     if (!this.fsm.transition('listening')) return
+    this.vad.reset()
     try {
       await this.hub.start()
     } catch (err) {
@@ -147,7 +145,7 @@ export class Orchestrator {
     this.cancelSession()
     this.unsubVAD?.(); this.unsubVAD = null
     this.hub.stop()
-    this.volume = 0; this.consecutiveFrames = 0
+    this.volume = 0; this.vad.reset()
     this.fsm.transition('stopped')
     this.message = ''
     this.emit()
@@ -172,28 +170,21 @@ export class Orchestrator {
   // ════════════════════════════════════════
 
   /**
-   * VAD 语音活动检测
+   * VAD 语音活动检测（由 PCM 帧订阅触发）
    *
-   * 阈值：peak >= 0.02 视为"有语音"
-   * 防抖：两次触发间隔 >= 2000ms
-   * 瞬时保护：连续帧计数（暂设为 1 帧即触发，可调大减少误触发）
+   * 委托给 VADDetector 进行自适应阈值判断 + 挂尾保护。
+   * onSpeechStart 时启动新录音会话。
    *
    * 仅在 listening 状态下运行
+   *
+   * @see VADDetector - 自适应算法细节
    */
   private detectSpeech(frame: PcmFrame): void {
     if (this.fsm.state !== 'listening') return
 
-    const now = performance.now()
-    if (frame.peak >= 0.02 && (now - this.lastTrigger) > 2000) {
-      this.consecutiveFrames++
-      if (this.consecutiveFrames >= 1) {
-        this.consecutiveFrames = 0
-        this.lastTrigger = now
-        this.startSession()
-      }
-    } else {
-      // 不满足条件时重置连续帧计数
-      this.consecutiveFrames = 0
+    this.vad.process(frame)
+    if (this.vad.onSpeechStart) {
+      this.startSession()
     }
   }
 
@@ -207,7 +198,7 @@ export class Orchestrator {
    * 流程：
    *   1. 如果已有活跃 Session，先取消它
    *   2. FSM: listening → recording
-   *   3. 创建 Session 实例，传入 Orchestrator 回调
+   *   3. 创建 Session 实例，传入 VADDetector + provider + Orchestrator 回调
    *   4. session.start() 启动 ASR
    *
    * 回调链（Session → Orchestrator）：
@@ -231,6 +222,7 @@ export class Orchestrator {
 
     const session = new Session(
       (sub) => this.hub.subscribe(sub),
+      this.vad,
       provider,
       this.settings,
       {

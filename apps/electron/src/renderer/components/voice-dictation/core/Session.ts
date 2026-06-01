@@ -6,7 +6,7 @@
  *
  * 关键契约：
  *   - 每轮录音一个独立 Session 实例，不跨轮泄漏状态
- *   - VAD 静音检测通过订阅 PCM 帧函数实现（由 Orchestrator 注入 AudioHub.subscribe）
+ *   - VAD 静音检测通过 VADDetector.isSpeaking 判断（自适应阈值 + 挂尾保护）
  *   - ASR Provider 由外部注入（依赖倒置），Session 不直接创建或引用 ASR 实现
  *   - 静音超过 vadStopTimeoutMs 自动触发 stop()
  *   - 转写输出通过 IPC commitVoiceDictation 提交到主进程
@@ -14,10 +14,12 @@
  *
  * 依赖注入（所有依赖在构造函数中传入，不自行 import）：
  *   - subscribe: PCM 帧订阅函数 → 由 Orchestrator 绑定 AudioHub.subscribe
+ *   - vad: VADDetector 实例 → 由 Orchestrator 持有，Session 读取 isSpeaking
  *   - provider: ASRProvider 实例 → 由 Orchestrator 通过 createASRProvider 创建
  *   - settings: VoiceDictationSettings → 当前语音配置
  *   - callbacks: SessionCallbacks → Orchestrator 回调
  *
+ * @see ./VADDetector.ts - 自适应 VAD 算法
  * @see ../types/panel.ts - PcmSubscriber / SessionCallbacks / SessionResult 定义
  * @see ../types/asr.ts - ASRProvider 接口
  */
@@ -26,6 +28,7 @@ import type { PcmFrame, PcmSubscriber } from '../types/panel'
 import type { SessionCallbacks, SessionResult } from '../types/panel'
 import type { ASRProvider } from '../types/asr'
 import type { VoiceDictationSettings } from '../../../../types'
+import type { VADDetector } from './VADDetector'
 
 export class Session {
   /** ASR Provider 引用 */
@@ -47,6 +50,7 @@ export class Session {
 
   constructor(
     private subscribe: (sub: PcmSubscriber) => () => void,
+    private vad: VADDetector,
     provider: ASRProvider,
     private settings: VoiceDictationSettings,
     private callbacks: SessionCallbacks,
@@ -66,20 +70,20 @@ export class Session {
    *   3. 启动已注入的 ASR Provider
    *
    * VAD 静音检测逻辑：
-   *   - peak < 0.01 → 视为静音
+   *   - 使用 VADDetector.isSpeaking 判断（自适应阈值 + 挂尾保护）
    *   - 静音持续时间 >= vadStopTimeoutMs 且录音时长 >= vadMinRecordMs → 自动 stop()
    */
   async start(): Promise<void> {
     if (this._disposed) return
 
-    // 订阅 PCM 帧 → 实时音量 + 静音检测
+    // 订阅 PCM 帧 → 实时音量 + VAD 静音检测
     this.subs.push(this.subscribe((frame: PcmFrame) => {
       if (this._disposed) return
       this.callbacks.onVolume(frame.peak)
 
       const now = performance.now()
-      // peak >= 0.01 视为有声音，重置静音计时
-      if (frame.peak >= 0.01) {
+      // isSpeaking 由 VADDetector 基于自适应阈值判断（含挂尾保护）
+      if (this.vad.isSpeaking) {
         this.silenceSince = now
       } else if (this.silenceSince > 0) {
         const t = this.settings.vadStopTimeoutMs || 1800
