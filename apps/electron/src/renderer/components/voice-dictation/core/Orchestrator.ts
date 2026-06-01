@@ -506,6 +506,19 @@ export class Orchestrator {
       // 停止当前录音会话
       this.cancelSession()
 
+      // 🎯 清空转录文本并重置状态
+      this.transcript = ''
+      this.message = '已取消'
+      this.emit()
+      this.logger.info('📝 清空转录文本并重置状态')
+
+      // 🎯 回到listening状态（免提模式）
+      if (this.settings?.handsfreeEnabled) {
+        this.logger.info('🔄 回到listening状态')
+        this.fsm.transition('listening')
+        this.emit()
+      }
+
     } else if (command.includes('停止') || command.includes('停下')) {
       this.logger.info('🛑 执行停止操作 - 打断Agent并停止录音')
 
@@ -525,6 +538,19 @@ export class Orchestrator {
 
       // 停止录音
       this.stopRecording()
+
+      // 🎯 清空转录文本并重置状态
+      this.transcript = ''
+      this.message = '已停止'
+      this.emit()
+      this.logger.info('📝 清空转录文本并重置状态')
+
+      // 🎯 回到listening状态（免提模式）
+      if (this.settings?.handsfreeEnabled) {
+        this.logger.info('🔄 回到listening状态')
+        this.fsm.transition('listening')
+        this.emit()
+      }
 
     } else {
       this.logger.info('🤔 其他即时指令，执行通用打断逻辑')
@@ -546,6 +572,19 @@ export class Orchestrator {
 
       // 停止当前录音会话
       this.cancelSession()
+
+      // 🎯 清空转录文本并重置状态
+      this.transcript = ''
+      this.message = '指令已执行'
+      this.emit()
+      this.logger.info('📝 清空转录文本并重置状态')
+
+      // 🎯 回到listening状态（免提模式）
+      if (this.settings?.handsfreeEnabled) {
+        this.logger.info('🔄 回到listening状态')
+        this.fsm.transition('listening')
+        this.emit()
+      }
     }
 
     this.logger.info('✅ 即时指令处理完成')
@@ -588,6 +627,26 @@ export class Orchestrator {
         textLength: text.length,
         reasoning
       })
+
+      // 🎯 发送后清空转录文本并重置状态
+      this.transcript = ''
+      this.message = '已发送'
+      this.emit()
+      this.logger.info('📝 清空转录文本并重置状态')
+
+      // 🎯 停止当前录音会话（如果还在录音）
+      if (this.session) {
+        this.logger.info('🛑 停止录音会话')
+        this.cancelSession()
+      }
+
+      // 🎯 回到listening状态（免提模式）
+      if (this.settings?.handsfreeEnabled) {
+        this.logger.info('🔄 回到listening状态')
+        this.fsm.transition('listening')
+        this.emit()
+      }
+
     } catch (error) {
       this.logger.error('❌ 发送语音到Agent失败', {
         error: error instanceof Error ? error.message : '未知错误',
