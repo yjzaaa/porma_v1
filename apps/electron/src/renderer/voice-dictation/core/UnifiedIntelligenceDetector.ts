@@ -1,16 +1,16 @@
-import type { UnifiedASRResult, AgentContext, IntelligentDecision } from '../types/intelligence'
-import { AgentLoopState } from '../types/intelligence'
-import { createLogger } from '../utils/logger'
-
 /**
  * 统一智能检测器
  *
  * 核心职责:
  *   1. 适配豆包ASR和WebSpeech的能力差异
- *   2. 豆包ASR：充分利用原生definite字段
+ *   2. 豆包ASR：充分利用definite字段 + 宽松判断
  *   3. WebSpeech：基于isFinal + 启发式增强
  *   4. 即时指令识别（通用）
  */
+import type { UnifiedASRResult, AgentContext, IntelligentDecision } from '../types/intelligence'
+import { AgentLoopState } from '../types/intelligence'
+import { createLogger } from '../utils/logger'
+
 export class UnifiedIntelligenceDetector {
   private logger = createLogger('智能检测器')
 
@@ -47,20 +47,44 @@ export class UnifiedIntelligenceDetector {
   }
 
   /**
-   * 豆包ASR完整性判断（原生能力）
+   * 豆包ASR完整性判断（宽松策略）
+   *
+   * 问题：原有逻辑过于严格，导致一直卡在"语音未完成"状态
+   * 解决：增加多种完整性判断条件
    */
   private isDoubaoComplete(result: UnifiedASRResult): boolean {
-    // 直接使用豆包的 definite 判断
+    // 1. 检查豆包ASR的 definite 字段
     const definiteCount = result.metadata.utterances?.filter(
       u => u.definite === true
     ).length || 0
 
-    // 如果有确定的片段，或者isFinal为true，则认为完整
-    const complete = definiteCount > 0 || result.isFinal
+    // 2. 检查 isFinal 状态
+    const isFinalComplete = result.isFinal === true
 
-    this.logger.debug('豆包ASR definite判断', {
+    // 3. 启发式判断：如果有一定长度的文本，也认为可能完整
+    const textLength = result.text.trim().length
+    const hasMinimumLength = textLength >= 3 // 至少3个字符
+
+    // 4. 检查是否有结束标点
+    const hasEndingPunctuation = /[。！？.!?]$/.test(result.text.trim())
+
+    // 5. 检查是否有明显的停顿标志（逗号、分号等）
+    const hasPauseMarker = /[，,；;、]$/.test(result.text.trim())
+
+    // 综合判断：宽松的条件避免卡在"未完成"状态
+    // 优先级：isFinal > definite > 长句子+标点 > 有标点
+    const complete = isFinalComplete ||
+                      definiteCount > 0 ||
+                      (hasMinimumLength && hasEndingPunctuation) ||
+                      (textLength >= 5 && hasPauseMarker)
+
+    this.logger.debug('豆包ASR完整性判断', {
       definiteCount,
       isFinal: result.isFinal,
+      textLength,
+      hasMinimumLength,
+      hasEndingPunctuation,
+      hasPauseMarker,
       complete
     })
 
@@ -144,8 +168,8 @@ export class UnifiedIntelligenceDetector {
 
     this.logger.info('开始智能决策', {
       text: asrResult.text,
-      agentLoopState: agentContext.loopState,
-      confidence: asrResult.confidence
+      confidence: asrResult.confidence,
+      agentLoopState: agentContext.loopState
     })
 
     // 1. 检查即时指令
