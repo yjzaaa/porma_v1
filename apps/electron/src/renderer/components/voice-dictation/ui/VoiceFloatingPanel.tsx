@@ -1,7 +1,20 @@
 /**
- * VoiceFloatingPanel — 语音面板 UI
+ * VoiceFloatingPanel — 语音听写浮动面板 UI
  *
- * 纯状态观察者：创建 Orchestrator → 注入 auto-send 回调 → 订阅 UIState → 渲染。
+ * 纯状态观察者模式：
+ *   1. 创建 Orchestrator 实例
+ *   2. 注入 onAutoSend 回调（转写文本 → Agent 会话）
+ *   3. 订阅 UIState 变更 → setState 驱动渲染
+ *   4. 监听语音设置变更事件、IPC 快捷键停止事件
+ *
+ * 渲染方式：React Portal 到 document.body，z-index 9999，始终浮动。
+ *
+ * 三种视觉状态：
+ *   - listening: 紧凑音量条（绿色脉冲指示）
+ *   - recording: 340px 卡片，含图标 + 转录文本 + REC 指示灯 + 音量条
+ *   - processing / completed / error: 卡片式结果展示
+ *
+ * @see ../core/Orchestrator.ts - 状态管理和自动发送回调
  */
 
 import * as React from 'react'
@@ -18,14 +31,28 @@ import type { SDKMessage } from '@proma/shared'
 export function VoiceFloatingPanel(): React.ReactElement {
   const store = useStore()
   const orchRef = React.useRef<Orchestrator | null>(null)
+  /** UI 状态（由 Orchestrator 的 emit 驱动更新） */
   const [ui, setUI] = React.useState<VoiceUIState>({
     state: 'stopped', volume: 0, transcript: '', message: '', settings: null,
   })
 
+  /**
+   * 初始化 Orchestrator
+   *
+   * 执行顺序：
+   *   1. 创建 Orchestrator
+   *   2. 注入 onAutoSend（转写文本 → 清除代理草稿 → 构造 user 消息 → 发送到 Agent 会话）
+   *   3. 订阅 UIState 变更 → setUI
+   *   4. 加载语音设置并切换免提
+   *   5. 监听 proma:voice-settings-changed 事件（设置页变更时动态切换）
+   *   6. 监听 onVoiceDictationToggleStop（快捷键停止录音）
+   *   7. 清理：取消订阅 → 销毁 Orchestrator
+   */
   React.useEffect(() => {
     const orch = new Orchestrator()
     orchRef.current = orch
 
+    // 注入自动发送回调：转写文本 → 当前 Agent 会话
     orch.onAutoSend = (text: string) => {
       if (store.get(appModeAtom) !== 'agent') return
       const channelId = store.get(agentChannelIdAtom)
@@ -33,25 +60,32 @@ export function VoiceFloatingPanel(): React.ReactElement {
       const workspaceId = store.get(currentAgentWorkspaceIdAtom)
       if (!sessionId || !channelId) return
 
+      // 清除草稿
       store.set(agentSessionDraftsAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
       store.set(agentSessionDraftHtmlAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
+      // 构造 user 消息并追加到消息列表
       store.set(liveMessagesMapAtom, (prev) => {
         const m = new Map(prev); const existing = m.get(sessionId) ?? []
         m.set(sessionId, [...existing, { type: 'user', message: { content: [{ type: 'text', text }] }, parent_tool_use_id: null, _createdAt: Date.now() } as unknown as SDKMessage])
         return m
       })
+      // 标记流式状态为 running
       store.set(agentStreamingStatesAtom, (prev) => {
         const m = new Map(prev); m.set(sessionId, { running: true, content: '', toolActivities: [], startedAt: Date.now() }); return m
       })
+      // 通过 IPC 发送消息
       window.electronAPI.sendAgentMessage({ sessionId, userMessage: text, channelId, workspaceId: workspaceId ?? undefined }).catch(console.error)
     }
 
+    // 订阅 UI 状态变更
     const unsub = orch.onUIState((s) => setUI({ ...s }))
 
+    // 加载语音设置并初始化
     window.electronAPI.getVoiceDictationSettings().then(s => {
       orch.toggleHandsfree(s).catch(() => {})
     }).catch(() => {})
 
+    // 监听设置变更事件（设置页修改时同步）
     const handler = () => {
       window.electronAPI.getVoiceDictationSettings().then(s => {
         orch.toggleHandsfree(s).catch(() => {})
@@ -59,6 +93,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
     }
     window.addEventListener('proma:voice-settings-changed', handler)
 
+    // 监听 IPC 停止录音通知（快捷键）
     const cts = window.electronAPI.onVoiceDictationToggleStop(() => {
       orch.stopRecording().catch(() => {})
     })
@@ -77,6 +112,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
 
   const panel = (
     <div className="fixed bottom-4 right-4 z-[9999]">
+      {/* listening 状态：紧凑的绿色音量条 */}
       {state === 'listening' && (
         <div className="flex items-center justify-center rounded-xl border px-2.5 py-2 shadow-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700">
           <div className="flex items-end gap-[3px] h-[14px]">
@@ -93,6 +129,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
         </div>
       )}
 
+      {/* recording / processing / completed / error 状态：详细卡片 */}
       {!['stopped', 'listening'].includes(state) && (
         <div className={`drop-shadow-2xl w-[340px] min-h-[100px] rounded-xl border-2 bg-white dark:bg-zinc-900 ${
           state === 'error' ? 'border-red-400 dark:border-red-600' :
@@ -101,6 +138,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
         }`}>
           <div className="p-4">
             <div className="flex items-start gap-3">
+              {/* 左侧图标 */}
               <div className={`flex size-[28px] shrink-0 items-center justify-center rounded-lg ${
                 state === 'error' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
                 state === 'processing' || state === 'completed' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
@@ -110,6 +148,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
                  state === 'completed' ? <Check className="size-3.5" strokeWidth={1.5} /> :
                  <VolumeBars peak={volume} />}
               </div>
+              {/* 右侧状态信息 */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
@@ -129,6 +168,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
             </div>
           </div>
           <div className="mx-4 h-px bg-zinc-100 dark:bg-zinc-800" />
+          {/* 转录文本展示 */}
           <div className="px-4 py-3">
             <p className={`text-sm leading-6 whitespace-pre-wrap break-words ${transcript ? 'text-zinc-700 dark:text-zinc-300' : 'text-zinc-300 dark:text-zinc-600 italic'}`}>
               {transcript || '等待语音...'}
@@ -142,6 +182,11 @@ export function VoiceFloatingPanel(): React.ReactElement {
   return createPortal(panel, document.body)
 }
 
+/**
+ * 音量条组件 — 5 条动态高度竖条展示实时音量
+ *
+ * 每个条的高度 = peak × 预设系数 × 15px，最低 3px
+ */
 function VolumeBars({ peak }: { peak: number }): React.ReactElement {
   return (
     <div className="flex items-end gap-[2px] h-3">

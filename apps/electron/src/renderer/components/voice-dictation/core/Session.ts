@@ -1,8 +1,19 @@
 /**
- * 语音模块 — Session 录音会话
+ * 语音模块 — Session 单次录音会话
  *
- * 生命周期：创建 → start() → 转写中 → stop() → complete → dispose
- * 每轮录音都是一个独立的 Session 实例，不跨轮泄漏状态。
+ * 生命周期：
+ *   创建 → start() → ASR 转写中 → stop() / 静音超时停止 → completeRecording → dispose
+ *
+ * 关键契约：
+ *   - 每轮录音一个独立 Session 实例，不跨轮泄漏状态
+ *   - start() 时订阅 AudioHub PCM 帧做 VAD 静音检测
+ *   - 静音超过 vadStopTimeoutMs 自动触发 stop()
+ *   - 转写输出通过 IPC commitVoiceDictation 提交到主进程
+ *   - dispose() 必须是幂等的，可多次安全调用
+ *
+ * @see AudioHub - PCM 帧来源
+ * @see createASRProvider - ASR 引擎创建
+ * @see ../types/panel.ts - SessionCallbacks / SessionResult 定义
  */
 
 import type { PcmFrame } from '../types/panel'
@@ -14,13 +25,21 @@ import type { VoiceDictationSettings } from '../../../../types'
 import { CHUNK_BYTES, concatAudioBuffers, splitChunk } from '../utils/pcm'
 
 export class Session {
+  /** ASR Provider 引用 */
   private provider: ASRProvider | null = null
+  /** 当前累积的转写文本 */
   private transcript = ''
+  /** 提交后返回的消息 */
   private commitMessage = ''
+  /** 取消订阅函数数组（PCM 帧订阅等） */
   private subs: Array<() => void> = []
+  /** 最近一次感知到非静音的时间戳（performance.now） */
   private silenceSince = 0
+  /** 本次录音开始时间戳 */
   private recordingStartedAt = 0
+  /** 是否已释放 */
   private _disposed = false
+  /** 是否已完成（防止 completeRecording 被多次调用） */
   private _completed = false
 
   constructor(
@@ -29,9 +48,21 @@ export class Session {
     private callbacks: SessionCallbacks,
   ) {}
 
+  /** 是否已释放 */
   get disposed() { return this._disposed }
 
-  /** 启动录制：订阅 PCM、启动 ASR */
+  /**
+   * 启动录音会话
+   *
+   * 流程：
+   *   1. 订阅 AudioHub PCM 帧 → 实时音量回调 + VAD 静音检测
+   *   2. 记录录音开始时间
+   *   3. 创建 ASR Provider 并启动识别
+   *
+   * VAD 静音检测逻辑：
+   *   - peak < 0.01 → 视为静音
+   *   - 静音持续时间 >= vadStopTimeoutMs 且录音时长 >= vadMinRecordMs → 自动 stop()
+   */
   async start(): Promise<void> {
     if (this._disposed) return
 
@@ -41,11 +72,13 @@ export class Session {
       this.callbacks.onVolume(frame.peak)
 
       const now = performance.now()
+      // peak >= 0.01 视为有声音，重置静音计时
       if (frame.peak >= 0.01) {
         this.silenceSince = now
       } else if (this.silenceSince > 0) {
         const t = this.settings.vadStopTimeoutMs || 1800
         const min = this.settings.vadMinRecordMs || 500
+        // 静音超时且录音时间足够 → 自动停止
         if (t > 0 && (now - this.silenceSince) >= t && (now - this.recordingStartedAt) >= min) {
           this.stop().catch(() => {})
         }
@@ -70,6 +103,7 @@ export class Session {
         },
         onVolume: (p: number) => this.callbacks.onVolume(p),
         onEnd: (text: string) => {
+          // Provider 端主动结束时（如 WebSpeech 自动断连）直接完成
           if (text && !this._disposed) this.completeRecording()
         },
         onError: (msg: string) => {
@@ -81,7 +115,14 @@ export class Session {
     }
   }
 
-  /** 主动停止录音，返回最终文本 */
+  /**
+   * 主动停止录音并返回最终文本
+   *
+   * @returns 最终累积的转写文本
+   *
+   * 调用 stop() 后 ASR Provider 返回最终结果，触发 completeRecording 完成流程。
+   * dispose() 后调用返回已累积的文本但不触发 complete。
+   */
   async stop(): Promise<string> {
     if (this._disposed) return this.transcript
     if (!this.provider) return this.transcript
@@ -92,6 +133,12 @@ export class Session {
     return this.transcript
   }
 
+  /**
+   * 完成录音：提交转写文本到主进程并通知回调
+   *
+   * 防护：_disposed 和 _completed 双重守卫，确保只执行一次。
+   * 空文本时直接返回空结果，不触发 commit IPC。
+   */
   private completeRecording(): void {
     if (this._disposed || this._completed) return
     this._completed = true
@@ -101,6 +148,7 @@ export class Session {
       return
     }
 
+    // 通过 IPC 将转写文本输出到当前活跃的输入框
     window.electronAPI.commitVoiceDictation({ text }).then(r => {
       this.commitMessage = r.message
       this.callbacks.onComplete({ text, commitMessage: r.message })
@@ -110,13 +158,21 @@ export class Session {
     })
   }
 
-  /** 取消录音 */
+  /**
+   * 取消录音（丢弃结果）
+   *
+   * 直接取消 ASR 并释放，不触发 completeRecording。
+   */
   cancel(): void {
     this.provider?.cancel().catch(() => {})
     this.dispose()
   }
 
-  /** 释放资源 */
+  /**
+   * 释放所有资源（幂等）
+   *
+   * 清理顺序：标记 disposed → 释放 ASR Provider → 取消所有订阅
+   */
   dispose(): void {
     this._disposed = true
     this.provider?.dispose(); this.provider = null
