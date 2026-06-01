@@ -28,18 +28,18 @@
  */
 
 import { AudioHub } from './AudioHub'
-import { VoiceStateMachine, VoiceState } from '../../../voice-dictation/core/VoiceStateMachine'
-import { StateTransitionQueue } from '../../../voice-dictation/core/StateTransitionQueue'
+import { VoiceStateMachine, VoiceState } from './VoiceStateMachine'
+import { StateTransitionQueue } from './StateTransitionQueue'
 import { Session } from './Session'
 import { VADDetector } from './VADDetector'
 import { createASRProvider } from '../asr/factory'
 import type { PcmFrame, PanelState, UIStateListener, VoiceUIState } from '../types/panel'
 import type { VoiceDictationSettings } from '@/types/settings'
-import type { StateTransitionContext } from '../../../voice-dictation/core/VoiceStateMachine'
-import { UnifiedIntelligenceDetector } from '../../../voice-dictation/core/UnifiedIntelligenceDetector'
-import { AgentStateMonitor } from '../../../voice-dictation/core/AgentStateMonitor'
-import type { UnifiedASRResult } from '../../../voice-dictation/types/intelligence'
-import { createLogger } from '../../../voice-dictation/utils/logger'
+import type { StateTransitionContext } from './VoiceStateMachine'
+import { UnifiedIntelligenceDetector } from './UnifiedIntelligenceDetector'
+import { AgentStateMonitor } from './AgentStateMonitor'
+import type { UnifiedASRResult } from '../types/intelligence'
+import { createLogger } from '../utils/logger'
 
 export class Orchestrator {
   /** AudioHub 单例：麦克风 PCM 采集 */

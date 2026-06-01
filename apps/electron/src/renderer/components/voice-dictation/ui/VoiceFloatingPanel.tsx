@@ -27,8 +27,8 @@ import { agentChannelIdAtom, currentAgentSessionIdAtom, currentAgentWorkspaceIdA
 import { appModeAtom } from '@/atoms/app-mode'
 import { shouldAutoSend } from '../utils/auto-send'
 import type { SDKMessage } from '@proma/shared'
-import { AgentStateMonitor } from '../../../voice-dictation/core/AgentStateMonitor'
-import type { AgentContext } from '../../../voice-dictation/types/intelligence'
+import { AgentStateMonitor } from '../core/AgentStateMonitor'
+import type { AgentContext } from '../types/intelligence'
 
 export function VoiceFloatingPanel(): React.ReactElement {
   const store = useStore()

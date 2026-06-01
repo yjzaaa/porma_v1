@@ -22,7 +22,7 @@
 import type { ASRProvider, ASRCallbacks } from '../types/asr'
 import type { VoiceDictationSettings, VoiceDictationStateEvent, VoiceDictationTranscriptEvent } from '../../../../types'
 import { CHUNK_BYTES, concatAudioBuffers, floatTo16BitPcm, splitChunk } from '../utils/pcm'
-import { createLogger } from '../../../voice-dictation/utils/logger'
+import { createLogger } from '../utils/logger'
 
 /** AudioContext 引用（兼容 WebKit 前缀） */
 const ACTX = (window as any).AudioContext ?? (window as any).webkitAudioContext as typeof AudioContext | undefined

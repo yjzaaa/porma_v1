@@ -18,7 +18,7 @@
  */
 
 import type { ASRProvider, ASRCallbacks } from '../types/asr'
-import { createLogger } from '../../../voice-dictation/utils/logger'
+import { createLogger } from '../utils/logger'
 
 /** Web Speech API 类型 shim（TS 内置类型中未完整包含） */
 interface SpeechRecognition_ {
