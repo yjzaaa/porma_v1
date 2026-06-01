@@ -927,6 +927,7 @@ export function useGlobalAgentListeners(): void {
           map.set(data.sessionId, {
             ...current,
             running: false,
+            content: '', // 🎯 清空内容字段，让状态监听器正确识别为PRE_USER_INPUT状态
             ...finalizeStreamingActivities(current.toolActivities),
           })
           return map

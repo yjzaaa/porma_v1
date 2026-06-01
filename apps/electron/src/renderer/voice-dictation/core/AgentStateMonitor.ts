@@ -97,7 +97,7 @@ export class AgentStateMonitor {
     }
     
     // 没有流式状态 → 可能是空闲或等待输入
-    if (!streamingState.running && streamingState.content === '' && !this.hasActiveStreaming()) {
+    if (!streamingState.running && streamingState.content === '') {
       this.logger.info('Agent处于等待用户输入状态')
       return AgentLoopState.PRE_USER_INPUT
     }
@@ -139,9 +139,9 @@ export class AgentStateMonitor {
    * 检查是否有活跃的流式处理
    */
   private hasActiveStreaming(): boolean {
-    // 检查实际的Agent流式状态
+    // 简化检查：直接返回运行状态
     const hasActive = this.currentState.streamingState.running
-    this.logger.debug('检查活跃流式状态', { hasActive, running: this.currentState.streamingState.running })
+    this.logger.debug('检查活跃流式状态', { hasActive })
     return hasActive
   }
   

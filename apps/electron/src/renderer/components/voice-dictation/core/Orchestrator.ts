@@ -28,12 +28,14 @@
  */
 
 import { AudioHub } from './AudioHub'
-import { StateMachine } from './StateMachine'
+import { VoiceStateMachine, VoiceState } from '../../../voice-dictation/core/VoiceStateMachine'
+import { StateTransitionQueue } from '../../../voice-dictation/core/StateTransitionQueue'
 import { Session } from './Session'
 import { VADDetector } from './VADDetector'
 import { createASRProvider } from '../asr/factory'
 import type { PcmFrame, PanelState, UIStateListener, VoiceUIState } from '../types/panel'
 import type { VoiceDictationSettings } from '@/types/settings'
+import type { StateTransitionContext } from '../../../voice-dictation/core/VoiceStateMachine'
 import { UnifiedIntelligenceDetector } from '../../../voice-dictation/core/UnifiedIntelligenceDetector'
 import { AgentStateMonitor } from '../../../voice-dictation/core/AgentStateMonitor'
 import type { UnifiedASRResult } from '../../../voice-dictation/types/intelligence'
@@ -42,8 +44,10 @@ import { createLogger } from '../../../voice-dictation/utils/logger'
 export class Orchestrator {
   /** AudioHub 单例：麦克风 PCM 采集 */
   readonly hub = new AudioHub()
-  /** 状态机：6 状态严格守卫 */
-  readonly fsm = new StateMachine()
+  /** 语音状态机：状态模式+策略模式实现 */
+  readonly voiceStateMachine = new VoiceStateMachine()
+  /** 🎯 状态转换队列：确保状态转换严格排队执行 */
+  readonly stateTransitionQueue = new StateTransitionQueue(this.voiceStateMachine)
   /** 自适应语音活动检测器 */
   readonly vad = new VADDetector()
 
@@ -60,10 +64,9 @@ export class Orchestrator {
   private currentAgentSessionId: string | null = null
   /** 当前语音设置快照 */
   private settings: VoiceDictationSettings | null = null
-  /** UI 状态监听器集合 */
-  private uiListeners = new Set<UIStateListener>()
   /** VAD 订阅取消函数 */
   private unsubVAD: (() => void) | null = null
+
   /** 日志记录器 */
   private logger = createLogger('Orchestrator')
 
@@ -85,33 +88,13 @@ export class Orchestrator {
   private message = ''
 
   /**
-   * 广播当前 UI 状态给所有监听器
-   *
-   * 状态变更的出口——任何内部状态变化最终都通过此方法通知 React 层。
-   * 单个监听器异常不影响其他监听器。
-   */
-  private emit(): void {
-    const state: VoiceUIState = {
-      state: this.fsm.state,
-      volume: this.volume,
-      transcript: this.transcript,
-      message: this.message,
-      settings: this.settings,
-    }
-    for (const l of this.uiListeners) {
-      try { l(state) } catch {}
-    }
-  }
-
-  /**
    * 订阅 UI 状态变更
    *
-   * @param fn - 状态监听器，每次 emit() 时收到最新 VoiceUIState
+   * @param fn - 状态监听器，每次状态变更时收到最新 VoiceUIState
    * @returns 取消订阅函数
    */
   onUIState(fn: UIStateListener): () => void {
-    this.uiListeners.add(fn)
-    return () => { this.uiListeners.delete(fn) }
+    return this.voiceStateMachine.onStateChange(fn)
   }
 
   // ════════════════════════════════════════
@@ -122,34 +105,39 @@ export class Orchestrator {
    * 开启免提模式
    *
    * 流程：
-   *   1. FSM: stopped → listening
+   *   1. 状态转换: stopped → listening
    *   2. 启动 AudioHub（getUserMedia 获取麦克风）
    *   3. 订阅 PCM 帧 → VAD 检测
    *
    * 麦克风不可用时回退到 stopped，发出错误消息。
    */
   async enableHandsfree(): Promise<void> {
-    if (!this.fsm.transition('listening')) return
+    const context = this.createTransitionContext('开启免提模式')
+
+    if (this.voiceStateMachine.getCurrentState() === VoiceState.LISTENING) {
+      this.logger.debug('已经在listening状态，跳过')
+      return
+    }
+
+    this.voiceStateMachine.transition(VoiceState.LISTENING, context)
     this.vad.reset()
+
     try {
       await this.hub.start()
     } catch (err) {
-      console.error('[Orchestrator] 麦克风启动失败:', err)
-      this.fsm.transition('stopped')
-      this.message = '麦克风不可用'
-      this.emit()
+      this.logger.error('麦克风启动失败', { error: err })
+      this.voiceStateMachine.transition(VoiceState.STOPPED, {
+        ...context,
+        reason: '麦克风不可用',
+        message: '麦克风不可用'
+      })
       return
     }
 
     // 挂载 VAD 检测：每次 PCM 帧都检测语音活动
     this.unsubVAD = this.hub.subscribe((frame: PcmFrame) => {
-      this.volume = frame.peak
-      this.emit()
       this.detectSpeech(frame)
     })
-
-    this.message = ''
-    this.emit()
   }
 
   /**
@@ -158,13 +146,14 @@ export class Orchestrator {
    * 清理顺序：取消 Session → 取消 VAD 订阅 → 停止 AudioHub → 重置状态
    */
   disableHandsfree(): void {
+    const context = this.createTransitionContext('关闭免提模式')
+
     this.cancelSession()
     this.unsubVAD?.(); this.unsubVAD = null
     this.hub.stop()
-    this.volume = 0; this.vad.reset()
-    this.fsm.transition('stopped')
-    this.message = ''
-    this.emit()
+    this.vad.reset()
+
+    this.voiceStateMachine.transition(VoiceState.STOPPED, context)
   }
 
   /**
@@ -196,14 +185,14 @@ export class Orchestrator {
    * @see VADDetector - 自适应算法细节
    */
   private detectSpeech(frame: PcmFrame): void {
-    if (this.fsm.state !== 'listening') return
+    if (this.voiceStateMachine.getCurrentState() !== VoiceState.LISTENING) return
 
-    const volume = frame.peak
     this.vad.process(frame)
+    const context = this.createTransitionContext('VAD检测')
 
     // 🎯 新增：详细的VAD检测日志
     this.logger.debug('VAD检测结果', {
-      volume: volume.toFixed(4),
+      volume: frame.peak.toFixed(4),
       isSpeaking: this.vad.isSpeaking,
       onSpeechStart: this.vad.onSpeechStart,
       onSpeechEnd: this.vad.onSpeechEnd
@@ -211,8 +200,71 @@ export class Orchestrator {
 
     if (this.vad.onSpeechStart) {
       this.logger.info('VAD检测到语音开始，启动录音会话')
-      this.startSession()
+      this.startSession(context)
     }
+  }
+
+  // ════════════════════════════════════════
+  //  状态转换上下文创建辅助方法
+  // ════════════════════════════════════════
+
+  /**
+   * 创建状态转换上下文
+   */
+  private createTransitionContext(
+    reason: string,
+    overrides?: Partial<StateTransitionContext>
+  ): StateTransitionContext {
+    return {
+      sessionId: this.currentAgentSessionId,
+      transcript: this.transcript,
+      message: this.message,
+      volume: this.volume,
+      settings: this.settings,
+      reason,
+      ...overrides
+    }
+  }
+
+  // ════════════════════════════════════════
+  // 状态转换队列辅助方法
+  // ════════════════════════════════════════
+
+  /**
+   * 立即状态转换（优先级高）
+   */
+  private immediateTransition(
+    targetState: VoiceState,
+    context: StateTransitionContext,
+    priority: number = 0
+  ): void {
+    this.stateTransitionQueue.enqueue(targetState, context, 0, priority)
+  }
+
+  /**
+   * 延迟状态转换
+   */
+  private delayedTransition(
+    targetState: VoiceState,
+    context: StateTransitionContext,
+    delayMs: number,
+    priority: number = 0
+  ): void {
+    this.stateTransitionQueue.enqueue(targetState, context, delayMs, priority)
+  }
+
+  /**
+   * 清空状态转换队列
+   */
+  private clearTransitionQueue(): void {
+    this.stateTransitionQueue.clear()
+  }
+
+  /**
+   * 检查队列是否活跃
+   */
+  private isTransitionQueueActive(): boolean {
+    return this.stateTransitionQueue.isActive()
   }
 
   // ════════════════════════════════════════
@@ -224,26 +276,31 @@ export class Orchestrator {
    *
    * 流程：
    *   1. 如果已有活跃 Session，先取消它
-   *   2. FSM: listening → recording
+   *   2. 状态转换: listening → recording
    *   3. 创建 Session 实例，传入 VADDetector + provider + Orchestrator 回调
    *   4. session.start() 启动 ASR
    *
    * 回调链（Session → Orchestrator）：
-   *   onVolume → 更新音量 → emit
-   *   onTranscript → 智能决策判断 → emit
-   *   onMetadata → 更新消息 → emit
-   *   onComplete → 通知自动发送 → FSM stopped → 2s 后自动回 listening（免提模式）
-   *   onError → FSM error → 2s 后自动恢复
+   *   onVolume → 更新音量 → 状态转换
+   *   onTranscript → 智能决策判断 → 状态转换
+   *   onMetadata → 更新消息 → 状态转换
+   *   onComplete → 通知自动发送 → 状态转换 → 免提模式下自动回listening
+   *   onError → 状态转换 → 2s 后自动恢复
    */
-  private startSession(): void {
+  private startSession(context: StateTransitionContext): void {
     // 清理旧 Session（防止并发）
     if (this.session) { this.session.cancel(); this.session = null }
-    if (!this.fsm.transition('recording')) return
     if (!this.settings) return
 
     this.logger.info('启动新录音会话', { engine: this.settings.engine })
     this.transcript = ''; this.message = '正在监听...'
-    this.emit()
+
+    // 状态转换：listening → recording
+    this.voiceStateMachine.transition(VoiceState.RECORDING, {
+      ...context,
+      transcript: '',
+      message: '正在监听...'
+    })
 
     const engine = this.settings.engine || 'doubao'
     const provider = createASRProvider(engine)
@@ -256,13 +313,13 @@ export class Orchestrator {
       {
         onVolume: (p: number) => {
           this.volume = p
-          this.emit()
+          // 音量更新不需要状态转换，只更新内部状态
         },
 
         // 🎯 新增：集成智能决策
         onTranscript: (text: string, isFinal?: boolean) => {
           this.transcript = text
-          this.emit()
+          // 转录更新不需要立即emit，让智能决策来驱动状态变更
 
           this.logger.info('收到语音转写结果', {
             text: text.substring(0, 20) + (text.length > 20 ? '...' : ''),
@@ -315,9 +372,15 @@ export class Orchestrator {
             this.message = decision.reasoning
           }
 
-          // 🎯 再次emit确保UI能及时反映智能决策结果
-          this.emit()
-          this.logger.debug('智能决策后emit状态', {
+          // 🎯 通过状态机确保UI能及时反映智能决策结果
+          this.voiceStateMachine.transition(
+            this.voiceStateMachine.getCurrentState(),
+            this.createTransitionContext('智能决策结果', {
+              message: decision.reasoning,
+              extra: { sendStrategy: decision.sendStrategy }
+            })
+          )
+          this.logger.debug('智能决策后状态更新', {
             message: this.message,
             sendStrategy: decision.sendStrategy
           })
@@ -326,9 +389,34 @@ export class Orchestrator {
           if (decision.shouldSend) {
             if (decision.sendStrategy === 'interrupt') {
               this.logger.warn('检测到即时指令，准备处理', { text })
+
+              // 🎯 先显示"检测到指令"状态，给用户即时反馈
+              const currentState = this.voiceStateMachine.getCurrentState()
+              if (currentState !== VoiceState.PROCESSING) {
+                this.immediateTransition(
+                  VoiceState.PROCESSING,
+                  this.createTransitionContext('检测到即时指令', {
+                    transcript: this.transcript,
+                    message: '检测到指令...'
+                  }),
+                  10  // 高优先级
+                )
+              }
+
               this.handleImmediateCommand(text, decision.reasoning)
             } else if (decision.sendStrategy === 'immediate') {
               this.logger.info('立即发送文本到Agent', { text })
+
+              // 🎯 先显示"准备发送"状态，让用户看到即将发送的内容
+              this.immediateTransition(
+                VoiceState.PROCESSING,
+                this.createTransitionContext('准备发送', {
+                  transcript: this.transcript,
+                  message: '准备发送...'
+                }),
+                10  // 高优先级
+              )
+
               // 🎯 真正实现发送逻辑
               this.sendToAgent(text, decision.reasoning)
             } else if (decision.sendStrategy === 'wait') {
@@ -344,47 +432,86 @@ export class Orchestrator {
 
         onMetadata: (m: string) => {
           this.message = m
-          this.emit()
+          this.voiceStateMachine.transition(
+            this.voiceStateMachine.getCurrentState(),
+            this.createTransitionContext('元数据更新', { message: m })
+          )
           this.logger.debug('收到元数据更新', { message: m })
         },
 
         onComplete: (result) => {
           this.session = null
           this.message = result.commitMessage
-          this.emit()
 
-          this.logger.info('录音会话完成', {
+          // 🎯 不立即转换到COMPLETED，等待智能决策结果
+          // 状态转换将在onTranscript中的智能决策处理
+          this.logger.info('录音会话完成，等待智能决策', {
             textLength: result.text.length,
-            commitMessage: result.commitMessage,
-            note: '发送由智能决策控制，此处不再重复发送'
+            commitMessage: result.commitMessage
           })
 
+          // 🎯 如果没有智能决策（如超时停止），则直接转换到COMPLETED
+          // 这通过检查this.session是否为null来判断
+          if (this.transcript === '' && result.text === '') {
+            this.voiceStateMachine.transition(
+              VoiceState.COMPLETED,
+              this.createTransitionContext('录音会话完成', {
+                transcript: result.text,
+                message: result.commitMessage,
+                extra: { note: '录音会话完成，无内容' }
+              })
+            )
+          }
+
           // 完成 → 暂时回归 stopped
-          this.fsm.transition('stopped')
-          this.emit()
+          this.voiceStateMachine.transition(
+            VoiceState.STOPPED,
+            this.createTransitionContext('录音完成', {
+              transcript: result.text,
+              message: result.commitMessage,
+              extra: { note: '发送由智能决策控制，此处不再重复发送' }
+            })
+          )
 
           // 🎯 免提模式：立即回归listening（不再等待2秒）
           if (this.settings?.handsfreeEnabled) {
             this.logger.info('🔄 免提模式：立即回归listening状态')
-            this.volume = 0; this.transcript = ''; this.message = ''
-            this.fsm.transition('listening')
-            this.emit()
+            this.voiceStateMachine.transition(
+              VoiceState.LISTENING,
+              this.createTransitionContext('免提模式自动回归', {
+                volume: 0,
+                transcript: '',
+                message: ''
+              })
+            )
           }
         },
 
         onError: (m: string) => {
           this.session = null
-          this.fsm.transition('error')
-          this.message = m
-          this.emit()
+          this.voiceStateMachine.transition(
+            VoiceState.ERROR,
+            this.createTransitionContext('录音会话错误', {
+              message: m
+            })
+          )
 
           this.logger.error('录音会话错误', { message: m })
 
           // 2s 后自动恢复
           setTimeout(() => {
-            this.fsm.transition('stopped')
-            if (this.settings?.handsfreeEnabled) this.fsm.transition('listening')
-            this.emit()
+            this.voiceStateMachine.transition(
+              VoiceState.STOPPED,
+              this.createTransitionContext('从错误状态自动恢复')
+            )
+
+            if (this.settings?.handsfreeEnabled) {
+              this.voiceStateMachine.transition(
+                VoiceState.LISTENING,
+                this.createTransitionContext('免提模式自动恢复')
+              )
+            }
+
             this.logger.info('从错误状态自动恢复')
           }, 2000)
         },
@@ -412,7 +539,7 @@ export class Orchestrator {
    * 在免提模式下用于手动结束一轮录音（不等 VAD 静音超时）。
    */
   async stopRecording(): Promise<void> {
-    if (this.fsm.state !== 'recording') return
+    if (this.voiceStateMachine.getCurrentState() !== VoiceState.RECORDING) return
     if (!this.session) return
     const text = await this.session.stop().catch(() => '')
     this.transcript = text
@@ -502,17 +629,90 @@ export class Orchestrator {
         this.logger.warn('⚠️ 没有sessionId，无法打断Agent')
       }
 
-      // 🎯 清空转录文本并立即停止录音
+      // 🎯 状态转换序列：PROCESSING (200ms) → COMPLETED (200ms) → LISTENING
+      this.immediateTransition(
+        VoiceState.PROCESSING,
+        this.createTransitionContext('取消操作', {
+          transcript: this.transcript,
+          message: '正在取消...'
+        }),
+        10  // 高优先级，确保立即执行
+      )
+
+      this.logger.info('📝 显示取消处理中状态')
+
+      // 🎯 200ms 后显示"已取消"状态
+      this.delayedTransition(
+        VoiceState.COMPLETED,
+        this.createTransitionContext('取消操作', {
+          transcript: '',
+          message: '已取消'
+        }),
+        200,
+        10  // 高优先级
+      )
+
+      // 🎯 真正打断Agent执行
+      if (this.currentAgentSessionId) {
+        this.logger.info('🎯 调用stopAgent打断Agent', { sessionId: this.currentAgentSessionId })
+        window.electronAPI.stopAgent(this.currentAgentSessionId).catch((error) => {
+          this.logger.error('❌ 打断Agent失败', {
+            error: error instanceof Error ? error.message : '未知错误',
+            sessionId: this.currentAgentSessionId
+          })
+        })
+        this.logger.info('✅ Agent已被打断')
+      } else {
+        this.logger.warn('⚠️ 没有sessionId，无法打断Agent')
+      }
+
+      this.logger.info('📝 取消操作后清空转录文本，立即停止录音')
       this.transcript = ''
       this.message = '已取消'
-      this.emit()
-      this.logger.info('📝 取消操作后清空转录文本，立即停止录音')
+
       this.stopRecording().catch(() => {
         this.logger.warn('停止录音会话失败或已完成')
       })
 
+      // 免提模式下自动回归listening（COMPLETED 状态显示200ms后）
+      if (this.settings?.handsfreeEnabled) {
+        this.delayedTransition(
+          VoiceState.LISTENING,
+          this.createTransitionContext('免提模式自动回归', {
+            volume: 0,
+            transcript: '',
+            message: ''
+          }),
+          400,  // 200ms (PROCESSING) + 200ms (COMPLETED) = 400ms 总时间
+          10   // 高优先级
+        )
+      }
+
     } else if (command.includes('停止') || command.includes('停下')) {
       this.logger.info('🛑 执行停止操作 - 打断Agent并停止录音')
+
+      // 🎯 状态转换序列：PROCESSING (200ms) → COMPLETED (200ms) → LISTENING
+      this.immediateTransition(
+        VoiceState.PROCESSING,
+        this.createTransitionContext('停止操作', {
+          transcript: this.transcript,
+          message: '正在停止...'
+        }),
+        10  // 高优先级
+      )
+
+      this.logger.info('📝 显示停止处理中状态')
+
+      // 🎯 200ms 后显示"已停止"状态
+      this.delayedTransition(
+        VoiceState.COMPLETED,
+        this.createTransitionContext('停止操作', {
+          transcript: '',
+          message: '已停止'
+        }),
+        200,
+        10  // 高优先级
+      )
 
       // 🎯 真正打断Agent执行
       if (this.currentAgentSessionId) {
@@ -528,14 +728,28 @@ export class Orchestrator {
         this.logger.warn('⚠️ 没有sessionId，无法停止Agent')
       }
 
-      // 🎯 清空转录文本并立即停止录音
+      // 🎯 真正打断Agent执行
+      this.logger.info('📝 停止操作后清空转录文本，立即停止录音')
       this.transcript = ''
       this.message = '已停止'
-      this.emit()
-      this.logger.info('📝 停止操作后清空转录文本，立即停止录音')
+
       this.stopRecording().catch(() => {
         this.logger.warn('停止录音会话失败或已完成')
       })
+
+      // 免提模式下自动回归listening（COMPLETED 状态显示200ms后）
+      if (this.settings?.handsfreeEnabled) {
+        this.delayedTransition(
+          VoiceState.LISTENING,
+          this.createTransitionContext('免提模式自动回归', {
+            volume: 0,
+            transcript: '',
+            message: ''
+          }),
+          400,  // 200ms (PROCESSING) + 200ms (COMPLETED) = 400ms 总时间
+          10   // 高优先级
+        )
+      }
 
     } else {
       this.logger.info('🤔 其他即时指令，执行通用打断逻辑')
@@ -558,16 +772,62 @@ export class Orchestrator {
       // 停止当前录音会话
       this.cancelSession()
 
-      // 🎯 清空转录文本并立即停止录音
+      // 🎯 先显示"正在处理"状态，给用户即时反馈
+      this.voiceStateMachine.transition(
+        VoiceState.PROCESSING,
+        this.createTransitionContext('即时指令执行', {
+          transcript: this.transcript,
+          message: '正在处理指令...'
+        })
+      )
+
+      // 🎯 通用的即时指令处理：打断Agent
+      if (this.currentAgentSessionId) {
+        this.logger.info('🎯 调用stopAgent处理即时指令', { sessionId: this.currentAgentSessionId, command })
+        window.electronAPI.stopAgent(this.currentAgentSessionId).catch((error) => {
+          this.logger.error('❌ 处理即时指令失败', {
+            error: error instanceof Error ? error.message : '未知错误',
+            sessionId: this.currentAgentSessionId,
+            command
+          })
+        })
+        this.logger.info('✅ 即时指令处理完成 - Agent已被打断')
+      } else {
+        this.logger.warn('⚠️ 没有sessionId，无法处理即时指令')
+      }
+
+      // 🎯 200ms 后显示"指令已执行"状态
+      this.delayedTransition(
+        VoiceState.COMPLETED,
+        this.createTransitionContext('即时指令执行', {
+          transcript: '',
+          message: '指令已执行'
+        }),
+        200,
+        10  // 高优先级
+      )
+
+      this.logger.info('📝 清空转录文本，立即停止录音')
       this.transcript = ''
       this.message = '指令已执行'
-      this.emit()
-      this.logger.info('📝 清空转录文本，立即停止录音')
 
-      // 🎯 立即停止录音会话（会触发onComplete，自动回到listening）
       this.stopRecording().catch(() => {
         this.logger.warn('停止录音会话失败或已完成')
       })
+
+      // 免提模式下自动回归listening（COMPLETED 状态显示200ms后）
+      if (this.settings?.handsfreeEnabled) {
+        this.delayedTransition(
+          VoiceState.LISTENING,
+          this.createTransitionContext('免提模式自动回归', {
+            volume: 0,
+            transcript: '',
+            message: ''
+          }),
+          400,  // 200ms (PROCESSING) + 200ms (COMPLETED) = 400ms 总时间
+          10   // 高优先级
+        )
+      }
     }
 
     this.logger.info('✅ 即时指令处理完成')
@@ -611,10 +871,35 @@ export class Orchestrator {
         reasoning
       })
 
-      // 🎯 发送后清空转录文本并立即停止录音
+      // 🎯 发送后清空转录文本
       this.transcript = ''
       this.message = '已发送'
-      this.emit()
+
+      // 🎯 快速显示"已发送"状态（200ms后），然后立即回到LISTENING
+      this.delayedTransition(
+        VoiceState.COMPLETED,
+        this.createTransitionContext('发送完成', {
+          transcript: '',
+          message: '已发送'
+        }),
+        200,  // 200ms 后显示"已发送"
+        10   // 高优先级
+      )
+
+      // 免提模式下快速回到LISTENING状态（总共显示400ms后）
+      if (this.settings?.handsfreeEnabled) {
+        this.delayedTransition(
+          VoiceState.LISTENING,
+          this.createTransitionContext('免提模式自动回归', {
+            volume: 0,
+            transcript: '',
+            message: ''
+          }),
+          400,  // 200ms (准备发送) + 200ms (已发送) = 400ms 总时间
+          10   // 高优先级
+        )
+      }
+
       this.logger.info('📝 发送后清空转录文本，立即停止录音')
 
       // 🎯 立即停止录音会话（会触发onComplete，自动回到listening）
