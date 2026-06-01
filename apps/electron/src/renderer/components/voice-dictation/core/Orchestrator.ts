@@ -527,8 +527,25 @@ export class Orchestrator {
       this.stopRecording()
 
     } else {
-      this.logger.info('🤔 其他即时指令，准备特殊处理')
-      // 其他即时指令的处理逻辑
+      this.logger.info('🤔 其他即时指令，执行通用打断逻辑')
+
+      // 🎯 通用的即时指令处理：打断Agent
+      if (this.currentAgentSessionId) {
+        this.logger.info('🎯 调用stopAgent处理即时指令', { sessionId: this.currentAgentSessionId, command })
+        window.electronAPI.stopAgent(this.currentAgentSessionId).catch((error) => {
+          this.logger.error('❌ 处理即时指令失败', {
+            error: error instanceof Error ? error.message : '未知错误',
+            sessionId: this.currentAgentSessionId,
+            command
+          })
+        })
+        this.logger.info('✅ 即时指令处理完成 - Agent已被打断')
+      } else {
+        this.logger.warn('⚠️ 没有sessionId，无法处理即时指令')
+      }
+
+      // 停止当前录音会话
+      this.cancelSession()
     }
 
     this.logger.info('✅ 即时指令处理完成')
