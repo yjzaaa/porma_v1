@@ -57,6 +57,8 @@ contextBridge.exposeInMainWorld('electronAPI', electronAPI)
  * 保持此接口与所有 preload 子模块的导出一致。
  */
 export interface ElectronAPI {
+  getOpenAIBaseUrlPreset: () => Promise<string | null>
+
   getRuntimeStatus: () => Promise<import('@proma/shared').RuntimeStatus | null>
   reinitRuntime: () => Promise<import('@proma/shared').RuntimeStatus>
   getGitRepoStatus: (dirPath: string) => Promise<import('@proma/shared').GitRepoStatus | null>

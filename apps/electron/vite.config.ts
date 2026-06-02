@@ -24,5 +24,9 @@ export default defineConfig({
     port: 5175,
     strictPort: true, // 确保使用指定端口，如被占用则报错
     open: false,
+    watch: {
+      // 语音听写日志目录，避免日志写入触发 HMR
+      ignored: ['**/logs/**'],
+    },
   },
 })

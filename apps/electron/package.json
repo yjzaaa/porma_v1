@@ -150,7 +150,9 @@
   "electronmon": {
     "patterns": [
       "dist/main.cjs",
-      "dist/preload.cjs"
+      "dist/preload.cjs",
+      "!logs/**",
+      "!**/*.log"
     ],
     "logLevel": "verbose"
   },

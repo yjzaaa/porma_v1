@@ -46,6 +46,11 @@ import {
 import { calculateStorageStats, cleanupStorage, cleanupTempFiles } from '../lib/storage/storage-service'
 
 export function registerMiscHandlers(): void {
+  ipcMain.handle('misc:get-openai-base-url-preset', async (): Promise<string | null> => {
+    const value = process.env.OPENAI_BASE_URL?.trim()
+    return value && value.length > 0 ? value : null
+  })
+
   // ===== 系统提示词管理 =====
 
   ipcMain.handle(
@@ -336,7 +341,10 @@ export function registerMiscHandlers(): void {
       const { app } = await import('electron')
 
       try {
-        const logDir = join(app.getPath('userData'), 'logs')
+        // 开发环境落盘到当前项目目录，便于直接查看与提交排查信息。
+        const logDir = app.isPackaged
+          ? join(app.getPath('userData'), 'logs')
+          : join(process.cwd(), 'logs')
         if (!existsSync(logDir)) {
           mkdirSync(logDir, { recursive: true })
         }

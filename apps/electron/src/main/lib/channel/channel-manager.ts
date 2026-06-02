@@ -369,24 +369,54 @@ async function testAnthropicCompatible(
 async function testOpenAICompatible(baseUrl: string, apiKey: string, proxyUrl?: string): Promise<ChannelTestResult> {
   const url = normalizeBaseUrl(baseUrl)
   const fetchFn = getFetchFn(proxyUrl)
+  const headers: Record<string, string> = {}
+  if (apiKey.trim()) {
+    headers.Authorization = `Bearer ${apiKey}`
+  }
 
-  const response = await fetchFn(`${url}/models`, {
+  const modelsResponse = await fetchFn(`${url}/models`, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers,
   })
 
-  if (response.ok) {
+  if (modelsResponse.ok) {
     return { success: true, message: '连接成功' }
   }
 
-  if (response.status === 401) {
+  if (modelsResponse.status === 401) {
     return { success: false, message: 'API Key 无效' }
   }
 
-  const text = await response.text().catch(() => '')
-  return { success: false, message: `请求失败 (${response.status}): ${text.slice(0, 200)}` }
+  // 许多 OpenAI 兼容网关不实现 /models：按 llm.ts 的 openai-completions 思路回退探测 /chat/completions
+  const chatResponse = await fetchFn(`${url}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'content-type': 'application/json',
+    },
+    // 不传 model，若端点存在通常返回 400/422（参数错误），可判定链路可达。
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 1,
+      stream: false,
+    }),
+  })
+
+  if (chatResponse.status === 401) {
+    return { success: false, message: 'API Key 无效' }
+  }
+
+  if (chatResponse.ok || chatResponse.status === 400 || chatResponse.status === 422) {
+    return { success: true, message: '连接成功（已验证 /chat/completions）' }
+  }
+
+  const modelsText = await modelsResponse.text().catch(() => '')
+  const chatText = await chatResponse.text().catch(() => '')
+  return {
+    success: false,
+    message: `网关可达，但未找到可用 OpenAI 端点（/models=${modelsResponse.status} /chat/completions=${chatResponse.status}）` +
+      `${chatText ? `: ${chatText.slice(0, 120)}` : (modelsText ? `: ${modelsText.slice(0, 120)}` : '')}`,
+  }
 }
 
 /**
@@ -502,7 +532,7 @@ export async function refreshAllChannelModels(): Promise<Channel[]> {
   const results = await Promise.allSettled(
     enabledChannels.map(async (channel) => {
       const apiKey = decryptKey(channel.apiKey)
-      if (!apiKey) return null
+      if (!apiKey && channel.provider !== 'openai' && channel.provider !== 'custom') return null
 
       const result = await fetchModels({
         provider: channel.provider,
@@ -634,12 +664,14 @@ interface OpenAIModelItem {
 async function fetchOpenAICompatibleModels(baseUrl: string, apiKey: string, proxyUrl?: string): Promise<FetchModelsResult> {
   const url = normalizeBaseUrl(baseUrl)
   const fetchFn = getFetchFn(proxyUrl)
+  const headers: Record<string, string> = {}
+  if (apiKey.trim()) {
+    headers.Authorization = `Bearer ${apiKey}`
+  }
 
   const response = await fetchFn(`${url}/models`, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers,
   })
 
   if (response.status === 401) {
@@ -647,6 +679,40 @@ async function fetchOpenAICompatibleModels(baseUrl: string, apiKey: string, prox
   }
 
   if (!response.ok) {
+    // 与 testOpenAICompatible 对齐：/models 不可用时，回退探测 /chat/completions
+    const chatResponse = await fetchFn(`${url}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 1,
+        stream: false,
+      }),
+    })
+
+    if (chatResponse.status === 401) {
+      return { success: false, message: 'API Key 无效', models: [] }
+    }
+
+    if (chatResponse.ok || chatResponse.status === 400 || chatResponse.status === 422) {
+      const envModel = (process.env.OPENAI_MODEL ?? process.env.LLM_MODEL ?? '').trim()
+      if (envModel) {
+        return {
+          success: true,
+          message: `网关不支持 /models，已使用环境变量模型: ${envModel}`,
+          models: [{ id: envModel, name: envModel, enabled: true }],
+        }
+      }
+      return {
+        success: true,
+        message: '网关不支持 /models，请在下方“手动添加模型”输入模型 ID',
+        models: [],
+      }
+    }
+
     const text = await response.text().catch(() => '')
     return { success: false, message: `请求失败 (${response.status}): ${text.slice(0, 200)}`, models: [] }
   }

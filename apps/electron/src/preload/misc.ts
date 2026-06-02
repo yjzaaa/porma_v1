@@ -24,6 +24,9 @@ import type {
 } from '../types'
 
 const api: Record<string, unknown> = {
+  // ===== 通用环境 =====
+  getOpenAIBaseUrlPreset: () => ipcRenderer.invoke('misc:get-openai-base-url-preset'),
+
   // ===== 快速任务 =====
   submitQuickTask: (input: QuickTaskSubmitInput) => ipcRenderer.invoke(QUICK_TASK_IPC_CHANNELS.SUBMIT, input),
   hideQuickTask: () => ipcRenderer.invoke(QUICK_TASK_IPC_CHANNELS.HIDE),

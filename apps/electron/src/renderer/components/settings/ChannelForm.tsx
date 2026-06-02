@@ -94,6 +94,32 @@ const PROVIDER_CHAT_PATHS: Record<ProviderType, string> = {
   custom: '/chat/completions',
 }
 
+const MANUAL_BASE_URL_OPTION = '__manual__'
+
+function normalizeBaseUrlForPreset(value: string): string {
+  return value.trim().replace(/\/+$/, '')
+}
+
+function isLocalOpenAICompatibleBaseUrl(value: string): boolean {
+  const normalized = normalizeBaseUrlForPreset(value)
+  if (!normalized) return false
+  try {
+    const url = new URL(normalized)
+    const host = url.hostname.toLowerCase()
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true
+    if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true
+    if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true
+    const match172 = host.match(/^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/)
+    if (match172) {
+      const second = Number(match172[1])
+      if (second >= 16 && second <= 31) return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
 /**
  * 生成 API 端点预览 URL
  *
@@ -166,6 +192,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
   const [fetchResult, setFetchResult] = React.useState<FetchModelsResult | null>(null)
   const [apiKeyLoaded, setApiKeyLoaded] = React.useState(false)
   const [showExitDialog, setShowExitDialog] = React.useState(false)
+  const [openAIBaseUrlPreset, setOpenAIBaseUrlPreset] = React.useState<string | null>(null)
 
   const setChannelFormDirty = useSetAtom(channelFormDirtyAtom)
   const setGlobalChannels = useSetAtom(channelsAtom)
@@ -256,11 +283,56 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
     }
   }, [isEdit, apiKeyLoaded])
 
+  React.useEffect(() => {
+    let mounted = true
+    window.electronAPI.getOpenAIBaseUrlPreset()
+      .then((value) => {
+        if (!mounted) return
+        setOpenAIBaseUrlPreset(value)
+      })
+      .catch(() => {
+        if (!mounted) return
+        setOpenAIBaseUrlPreset(null)
+      })
+    return () => { mounted = false }
+  }, [])
+
   // 监听字段变化触发 auto-save
   React.useEffect(() => {
     scheduleAutoSave(models, name, provider, baseUrl, apiKey, enabled)
     return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current) }
   }, [models, name, provider, baseUrl, apiKey, enabled, scheduleAutoSave])
+
+  const supportsOpenAICompatiblePreset = provider === 'openai' || provider === 'custom'
+  const openAICompatibleBaseUrlPresets = React.useMemo(() => {
+    const presets: Array<{ value: string; label: string }> = [
+      { value: PROVIDER_DEFAULT_URLS.openai, label: 'OpenAI 官方（https://api.openai.com/v1）' },
+    ]
+    if (openAIBaseUrlPreset) {
+      presets.push({
+        value: openAIBaseUrlPreset,
+        label: `本地 OpenAI 兼容（${openAIBaseUrlPreset}）`,
+      })
+    }
+    return presets
+  }, [openAIBaseUrlPreset])
+
+  const currentPresetValue = React.useMemo(() => {
+    if (!supportsOpenAICompatiblePreset) return MANUAL_BASE_URL_OPTION
+    const normalized = normalizeBaseUrlForPreset(baseUrl)
+    const matched = openAICompatibleBaseUrlPresets.find(
+      (preset) => normalizeBaseUrlForPreset(preset.value) === normalized
+    )
+    return matched?.value ?? MANUAL_BASE_URL_OPTION
+  }, [supportsOpenAICompatiblePreset, baseUrl, openAICompatibleBaseUrlPresets])
+
+  const apiKeyOptional = React.useMemo(() => {
+    if (!(provider === 'openai' || provider === 'custom')) return false
+    if (openAIBaseUrlPreset && normalizeBaseUrlForPreset(baseUrl) === normalizeBaseUrlForPreset(openAIBaseUrlPreset)) {
+      return true
+    }
+    return isLocalOpenAICompatibleBaseUrl(baseUrl)
+  }, [openAIBaseUrlPreset, provider, baseUrl])
 
   // 切换供应商时自动更新 Base URL，Anthropic 兼容渠道自动添加预设模型
   const handleProviderChange = (newProvider: string): void => {
@@ -320,7 +392,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
 
   /** 从供应商 API 拉取可用模型列表 */
   const handleFetchModels = async (): Promise<void> => {
-    if (!apiKey.trim() || !baseUrl.trim()) return
+    if (!baseUrl.trim() || (!apiKeyOptional && !apiKey.trim())) return
 
     setFetchingModels(true)
     setFetchResult(null)
@@ -353,7 +425,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
 
   /** 测试连接（直接使用表单当前值，无需先保存） */
   const handleTest = async (): Promise<void> => {
-    if (!apiKey.trim() || !baseUrl.trim()) return
+    if (!baseUrl.trim() || (!apiKeyOptional && !apiKey.trim())) return
 
     setTesting(true)
     setTestResult(null)
@@ -374,7 +446,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
 
   /** 执行创建渠道 */
   const doCreate = React.useCallback(async (): Promise<Channel | null> => {
-    if (!name.trim() || !apiKey.trim()) return null
+    if (!name.trim() || (!apiKeyOptional && !apiKey.trim())) return null
 
     setSaving(true)
     try {
@@ -399,7 +471,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
     } finally {
       setSaving(false)
     }
-  }, [name, provider, baseUrl, apiKey, models, enabled, onAgentEligibilityChange])
+  }, [name, provider, baseUrl, apiKey, models, enabled, onAgentEligibilityChange, apiKeyOptional])
 
   /** 创建渠道（仅新建模式） */
   const handleCreate = async (): Promise<void> => {
@@ -487,7 +559,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
           <Button
             size="sm"
             onClick={handleCreate}
-            disabled={saving || !name.trim() || !apiKey.trim()}
+            disabled={saving || !name.trim() || (!apiKeyOptional && !apiKey.trim())}
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
             <span>创建</span>
@@ -512,6 +584,22 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
             options={PROVIDER_SELECT_OPTIONS}
             placeholder="选择供应商"
           />
+          {supportsOpenAICompatiblePreset && (
+            <SettingsSelect
+              label="OpenAI Base URL 预设"
+              value={currentPresetValue}
+              onValueChange={(value) => {
+                if (value === MANUAL_BASE_URL_OPTION) return
+                setBaseUrl(value)
+                setTestResult(null)
+              }}
+              options={[
+                ...openAICompatibleBaseUrlPresets,
+                { value: MANUAL_BASE_URL_OPTION, label: '手动输入（保持当前 Base URL）' },
+              ]}
+              placeholder="选择 OpenAI 兼容地址"
+            />
+          )}
           <SettingsInput
             label="Base URL"
             value={baseUrl}
@@ -528,7 +616,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
                 size="sm"
                 type="button"
                 onClick={handleTest}
-                disabled={testing || !apiKey.trim() || !baseUrl.trim()}
+                disabled={testing || !baseUrl.trim() || (!apiKeyOptional && !apiKey.trim())}
                 className="h-7 text-xs"
               >
                 {testing ? (
@@ -544,8 +632,8 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
                 type={showApiKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={isEdit ? '留空则不更新' : '输入 API Key'}
-                required={!isEdit}
+                placeholder={isEdit ? '留空则不更新' : (apiKeyOptional ? '可选：输入 API Key（如有）' : '输入 API Key')}
+                required={!isEdit && !apiKeyOptional}
                 className="pr-10"
               />
               <button
@@ -624,7 +712,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
             size="sm"
             type="button"
             onClick={handleFetchModels}
-            disabled={fetchingModels || !apiKey.trim() || !baseUrl.trim()}
+            disabled={fetchingModels || !baseUrl.trim() || (!apiKeyOptional && !apiKey.trim())}
             className="h-7 text-xs"
           >
             {fetchingModels ? (
@@ -769,7 +857,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
             <AlertDialogCancel onClick={handleDiscard}>放弃编辑</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleSaveAndClose}
-              disabled={saving || !name.trim() || !apiKey.trim()}
+              disabled={saving || !name.trim() || (!apiKeyOptional && !apiKey.trim())}
             >
               {saving ? <><Loader2 size={14} className="animate-spin" /> 保存中...</> : '保存并关闭'}
             </AlertDialogAction>

@@ -190,6 +190,12 @@ export class OpenAIAdapter implements ProviderAdapter {
   buildStreamRequest(input: StreamRequestInput): ProviderRequest {
     const url = normalizeBaseUrl(input.baseUrl)
     const messages = toOpenAIMessages(input)
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    }
+    if (input.apiKey.trim()) {
+      headers.Authorization = `Bearer ${input.apiKey}`
+    }
 
     const bodyObj: Record<string, unknown> = {
       model: input.modelId,
@@ -209,10 +215,7 @@ export class OpenAIAdapter implements ProviderAdapter {
 
     return {
       url: `${url}/chat/completions`,
-      headers: {
-        'Authorization': `Bearer ${input.apiKey}`,
-        'content-type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(bodyObj),
     }
   }
@@ -268,13 +271,16 @@ export class OpenAIAdapter implements ProviderAdapter {
 
   buildTitleRequest(input: TitleRequestInput): ProviderRequest {
     const url = normalizeBaseUrl(input.baseUrl)
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    }
+    if (input.apiKey.trim()) {
+      headers.Authorization = `Bearer ${input.apiKey}`
+    }
 
     return {
       url: `${url}/chat/completions`,
-      headers: {
-        'Authorization': `Bearer ${input.apiKey}`,
-        'content-type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model: input.modelId,
         messages: [{ role: 'user', content: input.prompt }],
