@@ -133,12 +133,12 @@ export class VoiceCaptureModule {
     if (!this.handsfreeEnabled) return
     this.vad.process(frame)
 
-    this.logger.debug('VAD检测结果', {
-      volume: frame.peak.toFixed(4),
-      isSpeaking: this.vad.isSpeaking,
-      onSpeechStart: this.vad.onSpeechStart,
-      onSpeechEnd: this.vad.onSpeechEnd,
-    })
+    // this.logger.debug('VAD检测结果', {
+    //   volume: frame.peak.toFixed(4),
+    //   isSpeaking: this.vad.isSpeaking,
+    //   onSpeechStart: this.vad.onSpeechStart,
+    //   onSpeechEnd: this.vad.onSpeechEnd,
+    // })
 
     if (this.vad.onSpeechStart) {
       this.logger.info('检测到语音开始，启动录音会话')
@@ -152,9 +152,10 @@ export class VoiceCaptureModule {
   private startSession(): void {
     if (!this.settings) return
 
-    if (this.session) {
-      this.session.cancel()
-      this.session = null
+    // 单会话模式：录音过程中不允许被新的 onSpeechStart 打断重建
+    if (this.session && !this.session.disposed) {
+      this.logger.debug('已有活跃录音会话，忽略本次启动请求')
+      return
     }
 
     const provider = this.createProvider()
@@ -185,10 +186,18 @@ export class VoiceCaptureModule {
     )
     session.events.on('metadata', (message) => this.bus.emit('session.metadata', { message }))
     session.events.on('complete', (result) => {
+      if (this.session !== session) {
+        this.logger.debug('忽略过期会话的完成事件')
+        return
+      }
       this.session = null
       this.bus.emit('session.complete', result)
     })
     session.events.on('error', (message) => {
+      if (this.session !== session) {
+        this.logger.debug('忽略过期会话的错误事件')
+        return
+      }
       this.session = null
       this.bus.emit('session.error', { message })
     })

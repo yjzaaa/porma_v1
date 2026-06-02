@@ -63,6 +63,9 @@ interface ServerPayload {
 interface ParsedServerMessage {
   text: string
   isFinal: boolean
+  metadata?: {
+    utterances?: Array<{ text: string; definite: boolean }>
+  }
 }
 
 interface DoubaoAsrHotword {
@@ -240,6 +243,19 @@ function isResultFinal(result: ServerResult): boolean {
   return result.utterances?.some((item) => item.definite === true) ?? false
 }
 
+function normalizeUtterances(
+  utterances: ServerResult['utterances'] | undefined,
+): Array<{ text: string; definite: boolean }> | undefined {
+  if (!utterances || utterances.length === 0) return undefined
+  const normalized = utterances
+    .map((item) => ({
+      text: item.text ?? '',
+      definite: item.definite === true,
+    }))
+    .filter((item) => item.text.trim().length > 0)
+  return normalized.length > 0 ? normalized : undefined
+}
+
 function parseServerPayload(value: unknown, fallbackFinal: boolean): ParsedServerMessage | null {
   if (typeof value !== 'object' || value === null) return null
   const payload = value as ServerPayload
@@ -255,9 +271,13 @@ function parseServerPayload(value: unknown, fallbackFinal: boolean): ParsedServe
   }
 
   if (payload.text) {
+    const authoritativeResult = getAuthoritativeResult(results)
     return {
       text: payload.text,
       isFinal: fallbackFinal || results.some(isResultFinal),
+      metadata: {
+        utterances: normalizeUtterances(authoritativeResult?.utterances),
+      },
     }
   }
 
@@ -268,6 +288,9 @@ function parseServerPayload(value: unknown, fallbackFinal: boolean): ParsedServe
   return {
     text,
     isFinal: fallbackFinal || utteranceFinal,
+    metadata: {
+      utterances: normalizeUtterances(authoritativeResult?.utterances),
+    },
   }
 }
 
@@ -387,6 +410,7 @@ export async function startDoubaoAsrSession(
             sessionId,
             text: parsed.text,
             isFinal: parsed.isFinal,
+            metadata: parsed.metadata,
           })
         }
       } catch (error) {

@@ -67,6 +67,10 @@ export class DoubaoProvider implements ASRProvider {
   private transcriptText = ''
   /** 停止超时句柄 */
   private stopTimeout: ReturnType<typeof setTimeout> | null = null
+  /** 停止等待 Promise 的 resolve（等待主进程 session 真正结束） */
+  private stopWaitResolve: (() => void) | null = null
+  /** 停止等待 Promise 的兜底超时 */
+  private stopWaitTimeout: ReturnType<typeof setTimeout> | null = null
   /** IPC 监听器清理函数 */
   private cleanupListeners: (() => void) | null = null
 
@@ -115,7 +119,7 @@ export class DoubaoProvider implements ASRProvider {
       // 提取utterances信息
       if (e.metadata?.utterances) {
         this.currentUtterances = e.metadata.utterances
-        this.currentDefinite = e.metadata.utterances.some((u: any) => u.definite === true)
+        this.currentDefinite = e.metadata.utterances.some((utterance) => utterance.definite === true)
         this.logger.debug('豆包ASR utterances更新', {
           utterances: e.metadata.utterances,
           definite: this.currentDefinite 
@@ -130,6 +134,9 @@ export class DoubaoProvider implements ASRProvider {
     const cs = window.electronAPI.onVoiceDictationState((e: VoiceDictationStateEvent) => {
       if (e.sessionId && e.sessionId !== this.sessionId) return
       if (e.message) callbacks.onState(e.status, e.message)
+      if (this.stopping && (e.status === 'idle' || e.status === 'completed' || e.status === 'error')) {
+        this.resolveStopWait()
+      }
     })
     unsubs.push(cs)
 
@@ -220,6 +227,7 @@ export class DoubaoProvider implements ASRProvider {
    */
   async stop(): Promise<string> {
     this.stopping = true
+    this.asrReady = false
     const sid = this.sessionId
 
     // 停止本地音频采集
@@ -227,9 +235,11 @@ export class DoubaoProvider implements ASRProvider {
     this.audioContext?.close().catch(() => {}); this.audioContext = null
     this.stream?.getTracks().forEach(t => t.stop()); this.stream = null
 
-    // IPC 通知主进程停止 ASR
+    // IPC 通知主进程停止 ASR，并等待最终 transcript/idle 状态回流，避免尾字丢失
     if (sid) {
+      const waitDone = this.waitForStopCompletion()
       await window.electronAPI.stopVoiceDictation({ sessionId: sid }).catch(() => {})
+      await waitDone
     }
     this.pendingAudio = []
 
@@ -243,8 +253,10 @@ export class DoubaoProvider implements ASRProvider {
    */
   async cancel(): Promise<void> {
     this.stopping = true
+    this.asrReady = false
     const sid = this.sessionId
     if (sid) { window.electronAPI.cancelVoiceDictation({ sessionId: sid }).catch(() => {}) }
+    this.resolveStopWait()
     this.processor?.disconnect(); this.processor = null
     this.audioContext?.close().catch(() => {}); this.audioContext = null
     this.stream?.getTracks().forEach(t => t.stop()); this.stream = null
@@ -275,6 +287,9 @@ export class DoubaoProvider implements ASRProvider {
     this.cleanupListeners?.()
     this.cleanupListeners = null
     if (this.stopTimeout) clearTimeout(this.stopTimeout)
+    if (this.stopWaitTimeout) clearTimeout(this.stopWaitTimeout)
+    this.stopWaitTimeout = null
+    this.stopWaitResolve = null
     this.cancel().catch(() => {})
     this.sessionId = null
     this.asrReady = false
@@ -282,5 +297,31 @@ export class DoubaoProvider implements ASRProvider {
     this.currentDefinite = undefined
     this.currentUtterances = undefined
     this.eventLogger.dispose()
+  }
+
+  /**
+   * 等待主进程关闭 ASR 会话，确保最终 transcript 已回流。
+   */
+  private waitForStopCompletion(): Promise<void> {
+    this.resolveStopWait()
+    return new Promise<void>((resolve) => {
+      this.stopWaitResolve = resolve
+      this.stopWaitTimeout = setTimeout(() => {
+        this.resolveStopWait()
+      }, 1500)
+    })
+  }
+
+  /**
+   * 结束 stop 等待（幂等）。
+   */
+  private resolveStopWait(): void {
+    if (this.stopWaitTimeout) {
+      clearTimeout(this.stopWaitTimeout)
+      this.stopWaitTimeout = null
+    }
+    const resolve = this.stopWaitResolve
+    this.stopWaitResolve = null
+    resolve?.()
   }
 }

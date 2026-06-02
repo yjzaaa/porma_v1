@@ -16,6 +16,10 @@ export class VoiceDecisionModule {
   private readonly unsubs: Array<() => void> = []
   /** 当前 ASR 引擎类型（用于构建统一结果） */
   private currentEngine: 'doubao' | 'webspeech' = 'doubao'
+  /** 最近一次已发送文本（用于去重） */
+  private lastSentText = ''
+  /** 最近一次发送时间戳 */
+  private lastSentAt = 0
 
   constructor(
     private readonly bus: VoiceDomainEventBus,
@@ -28,6 +32,9 @@ export class VoiceDecisionModule {
       }),
       this.bus.on('session.transcript', ({ text, isFinal, provider }) => {
         this.handleTranscript(text, isFinal, provider)
+      }),
+      this.bus.on('session.complete', ({ text }) => {
+        this.handleSessionComplete(text)
       }),
     )
   }
@@ -76,7 +83,46 @@ export class VoiceDecisionModule {
     })
 
     if (!decision.shouldSend) return
+    if (this.shouldSkipDuplicate(text)) {
+      this.logger.info('跳过重复发送（转写事件）', { text: `${text.substring(0, 20)}${text.length > 20 ? '...' : ''}` })
+      return
+    }
+    this.markSent(text)
     this.bus.emit('decision.execute', { decision, text })
+  }
+
+  /**
+   * 会话结束兜底决策：
+   * 豆包在某些场景下不会给出 definite=true，但 stop 后文本已经稳定，此处按 final 再判一次。
+   */
+  private handleSessionComplete(text: string): void {
+    const finalText = text.trim()
+    if (!finalText) return
+    if (this.shouldSkipDuplicate(finalText)) {
+      this.logger.info('跳过重复发送（会话完成兜底）', {
+        text: `${finalText.substring(0, 20)}${finalText.length > 20 ? '...' : ''}`,
+      })
+      return
+    }
+
+    const asrResult: UnifiedASRResult = {
+      text: finalText,
+      isFinal: true,
+      confidence: 0.8,
+      isComplete: true,
+      asrType: this.currentEngine,
+      metadata: {},
+    }
+    const agentContext = this.agentModule.getCurrentContext()
+    const decision = this.detector.makeIntelligentDecision(asrResult, agentContext)
+    if (!decision.shouldSend) return
+
+    this.logger.info('会话完成触发兜底发送决策', {
+      strategy: decision.sendStrategy,
+      reasoning: decision.reasoning,
+    })
+    this.markSent(finalText)
+    this.bus.emit('decision.execute', { decision, text: finalText })
   }
 
   /**
@@ -134,5 +180,21 @@ export class VoiceDecisionModule {
     }
 
     return metadata
+  }
+
+  /**
+   * 判定是否应跳过重复发送。
+   */
+  private shouldSkipDuplicate(text: string): boolean {
+    const now = Date.now()
+    return text === this.lastSentText && now - this.lastSentAt < 4000
+  }
+
+  /**
+   * 记录最近发送文本。
+   */
+  private markSent(text: string): void {
+    this.lastSentText = text
+    this.lastSentAt = Date.now()
   }
 }

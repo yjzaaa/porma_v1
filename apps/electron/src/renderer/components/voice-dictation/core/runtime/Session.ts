@@ -104,10 +104,10 @@ export class Session {
 
     try {
       await provider.start({
-        onTranscript: (text: string) => {
+        onTranscript: (text: string, isFinal: boolean) => {
           if (this._disposed) return
           this.transcript = text
-          this.events.emit('transcript', { text })
+          this.events.emit('transcript', { text, isFinal })
         },
         onState: (_s: string, msg?: string) => {
           if (msg) this.events.emit('metadata', msg)
