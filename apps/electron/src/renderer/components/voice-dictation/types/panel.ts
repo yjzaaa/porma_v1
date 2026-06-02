@@ -41,8 +41,6 @@ export type DetectorState = 'inactive' | 'listening' | 'hearing' | 'activating'
 export interface SessionResult {
   /** 最终识别的文本 */
   text: string
-  /** 提交结果的描述消息（如 "已追加到输入框"） */
-  commitMessage: string
 }
 
 // ===== Orchestrator → UI 层接口 =====

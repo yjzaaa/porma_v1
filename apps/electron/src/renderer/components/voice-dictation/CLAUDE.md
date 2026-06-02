@@ -28,7 +28,7 @@ flowchart TB
     subgraph runtime["运行时能力"]
         audio["core/runtime/AudioHub.ts<br/>PCM 采集与帧广播"]
         vad["core/runtime/VADDetector.ts<br/>语音活动检测"]
-        session["core/runtime/Session.ts<br/>会话编排 + Provider 事件桥接"]
+        session["core/runtime/Session.ts<br/>会话生命周期 + PCM 喂入 + Provider 事件桥接"]
         fsm["core/state/VoiceStateMachine.ts"]
         queue["core/state/StateTransitionQueue.ts"]
     end
@@ -38,6 +38,8 @@ flowchart TB
         doubao["asr/doubao.ts<br/>豆包 ASR 传输适配器（事件驱动）"]
         webspeech["asr/webspeech.ts<br/>WebSpeech 适配器（事件驱动）"]
         asrbus["types/asr.ts<br/>ASR 事件总线 + Provider 接口"]
+        transport["core/bus/VoiceAsrTransportBus.ts<br/>ASR 对外交互总线"]
+        interop["core/modules/VoiceAsrTransportModule.ts<br/>统一 IPC 外部交互层"]
     end
 
     panel --> orch
@@ -53,10 +55,11 @@ flowchart TB
     capture --> audio
     capture --> vad
     capture --> session
-    capture --> asrbus
+    capture --> transport
     session --> asrbus
     factory --> doubao
     factory --> webspeech
+    transport --> interop
 
     state --> fsm
     state --> queue
@@ -142,11 +145,13 @@ sequenceDiagram
 | `core/modules/VoiceAgentModule.ts` | Agent 状态桥接，提供 `AgentContext` |
 | `core/runtime/AudioHub.ts` | 麦克风 PCM 采集与帧广播 |
 | `core/runtime/VADDetector.ts` | 自适应语音活动检测 |
-| `core/runtime/Session.ts` | 单轮录音会话生命周期 + Provider 事件桥接 |
+| `core/runtime/Session.ts` | 单轮录音会话生命周期 + PCM 喂入 + Provider 事件桥接 |
 | `core/state/VoiceStateMachine.ts` | 语音状态机 |
 | `core/state/StateTransitionQueue.ts` | 状态迁移排队执行 |
+| `core/bus/VoiceAsrTransportBus.ts` | ASR 对外交互请求/响应总线 |
+| `core/modules/VoiceAsrTransportModule.ts` | 统一 IPC 外部交互层 |
 | `asr/factory.ts` | ASR Provider 工厂 |
-| `asr/doubao.ts` | 豆包 ASR 传输适配器（事件驱动） |
+| `asr/doubao.ts` | 豆包 ASR 传输适配器（事件驱动 + PCM 输入） |
 | `asr/webspeech.ts` | WebSpeech 传输适配器（事件驱动） |
 | `types/asr.ts` | ASR Provider 接口与 ASR 事件总线 |
 | `ui-events/voice-dictation-events.ts` | UI 侧全局事件（设置变更、自动发送请求） |
@@ -154,8 +159,9 @@ sequenceDiagram
 
 ## 当前设计原则
 
-1. **Facade 最小化**：Facade 只发布命令，不直接执行业务分支。  
-2. **总线协作**：模块间不互相调用实现，统一经 `VoiceDomainEventBus` 协作。  
-3. **状态单写口**：状态写入只在 `VoiceRuntimeStateModule`，降低竞态。  
-4. **动作事件收口**：发送/打断等副作用统一由 `action.*` 事件链处理。  
-5. **运行时与策略分层**：采集链路（Capture）与决策链路（Decision）解耦。  
+1. **Facade 最小化**：Facade 只发布命令，不直接执行业务分支。
+2. **总线协作**：模块间不互相调用实现，统一经 `VoiceDomainEventBus` 协作。
+3. **状态单写口**：状态写入只在 `VoiceRuntimeStateModule`，降低竞态。
+4. **动作事件收口**：发送/打断等副作用统一由 `action.*` 事件链处理。
+5. **运行时与策略分层**：采集链路（Capture）与决策链路（Decision）解耦。
+6. **外部交互统一**：ASR 的权限/启停/分片传输通过 `VoiceAsrTransportModule` 集中处理。

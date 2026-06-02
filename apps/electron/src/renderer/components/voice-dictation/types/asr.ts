@@ -1,3 +1,5 @@
+import type { PcmFrame } from './panel'
+
 /**
  * 语音模块 — ASR Provider 类型定义
  *
@@ -86,12 +88,14 @@ export type ASRProviderType = 'doubao' | 'webspeech'
 export interface ASRProvider {
   /** 订阅 ASR 事件 */
   onEvent(listener: ASREventListener): () => void
-  /** 启动识别会话，建立连接并开始音频采集 */
+  /** 启动识别会话，建立连接并准备接收 PCM */
   start(): Promise<void>
+  /** 接收会话侧推送的 PCM 帧 */
+  pushAudio(frame: PcmFrame): void
   /** 主动停止识别，返回最终累积的转写文本 */
   stop(): Promise<string>
   /** 取消识别，丢弃本次结果 */
   cancel(): Promise<void>
-  /** 释放所有资源：断开 IPC 监听、关闭音频流 */
+  /** 释放所有资源：断开监听、清空状态 */
   dispose(): void
 }

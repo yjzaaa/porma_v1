@@ -19,12 +19,7 @@
 
 import type { ASRProvider, ASREventListener } from '../types/asr'
 import { ASREventBus } from '../types/asr'
-import {
-  createVoiceEventLogger,
-  VoiceLogEventEmitter,
-  VoiceLogEventSubscriber,
-  type VoiceLogEventListener,
-} from '../ui-events'
+import type { PcmFrame } from '../types/panel'
 
 /** Web Speech API 类型 shim（TS 内置类型中未完整包含） */
 interface SpeechRecognition_ {
@@ -47,12 +42,6 @@ const SpeechCtor = ((window as any).SpeechRecognition ?? (window as any).webkitS
 export class WebSpeechProvider implements ASRProvider {
   /** ASR 事件总线 */
   private readonly eventBus = new ASREventBus()
-  /** 日志事件发射器 */
-  private readonly eventEmitter = new VoiceLogEventEmitter()
-  /** 统一日志适配器（事件驱动） */
-  private readonly logger = createVoiceEventLogger(this.eventEmitter)
-  /** 日志订阅器 */
-  private readonly eventLogger = new VoiceLogEventSubscriber('WebSpeech', this.eventEmitter)
   /** 当前 Recognition 实例 */
   private recognition: SpeechRecognition_ | null = null
   /** 累积的最终识别文本 */
@@ -87,6 +76,9 @@ export class WebSpeechProvider implements ASRProvider {
     this.startSession()
   }
 
+  /** Web Speech 不需要外部 PCM 输入 */
+  pushAudio(_frame: PcmFrame): void {}
+
   /**
    * 启动一次 SpeechRecognition 会话
    *
@@ -104,21 +96,14 @@ export class WebSpeechProvider implements ASRProvider {
       if (this.disposed) return
       let final = '', interim = ''
 
-      this.logger.debug('WebSpeech onresult事件', {
-        resultIndex: ev.resultIndex,
-        resultsLength: ev.results.length
-      })
-
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const res = ev.results[i]; if (!res) continue
         const t = res[0]?.transcript ?? ''
         if (res.isFinal) {
           final += t
           this.finalText += t
-          this.logger.debug('最终文本追加', { text: t })
         } else {
           interim += t
-          this.logger.debug('临时文本追加', { text: t })
         }
       }
 
@@ -128,13 +113,6 @@ export class WebSpeechProvider implements ASRProvider {
       if (final || interim) {
         const enhancedResult = this.finalText + interim
         const isEnhancedFinal = !interim && interimComplete
-
-        this.logger.info('WebSpeech结果增强', {
-          enhancedResult: enhancedResult.substring(0, 20) + '...',
-          isEnhancedFinal,
-          finalLength: final.length,
-          interimLength: interim.length
-        })
 
         this.eventBus.emit('transcript', { text: enhancedResult, isFinal: isEnhancedFinal })
       }
@@ -181,7 +159,6 @@ export class WebSpeechProvider implements ASRProvider {
     try { this.recognition?.abort() } catch {}
     this.recognition = null
     this.eventBus.clear()
-    this.eventLogger.dispose()
   }
 
   /**
@@ -196,37 +173,28 @@ export class WebSpeechProvider implements ASRProvider {
     const trimmed = interim.trim()
 
     if (!trimmed) {
-      this.logger.debug('临时文本为空，不完整')
       return false
     }
 
-    this.logger.debug('开始临时文本完整性检测', { text: trimmed.substring(0, 20) + '...' })
-
     // 句末标点检测
     if (/[。！？.!?]$/.test(trimmed)) {
-      this.logger.debug('检测到句末标点，判定为完整')
       return true
     }
 
     // 长度检测
     if (trimmed.length > 20 && !/[,，]$/.test(trimmed)) {
-      this.logger.debug('检测到长句子且无逗号，判定为完整', { length: trimmed.length })
       return true
     }
 
     // 问句检测
     if (/[？?]$/.test(trimmed)) {
-      this.logger.debug('检测到问句，判定为完整')
       return true
     }
 
     // 感叹号检测
     if (/[！!]$/.test(trimmed)) {
-      this.logger.debug('检测到感叹句，判定为完整')
       return true
     }
-
-    this.logger.debug('临时文本完整性检测未通过')
     return false
   }
 }

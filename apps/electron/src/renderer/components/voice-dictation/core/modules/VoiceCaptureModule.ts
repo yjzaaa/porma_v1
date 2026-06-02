@@ -7,6 +7,7 @@ import type { VoiceDictationSettings } from '@/types/settings'
 import type { ASRProvider } from '../../types/asr'
 import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
 import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
+import { VoiceAsrTransportBus } from '../bus/VoiceAsrTransportBus'
 import type { PcmFrame } from '../../types/panel'
 import { createASRProvider } from '../../asr/factory'
 import { AudioHub } from '../runtime/AudioHub'
@@ -19,6 +20,7 @@ import {
   SESSION_EVENT_TRANSCRIPT,
   SESSION_EVENT_VOLUME,
 } from '../bus/SessionEventKeys'
+import { VoiceAsrTransportModule } from './VoiceAsrTransportModule'
 
 export class VoiceCaptureModule {
   /** 统一麦克风采集中心 */
@@ -27,6 +29,8 @@ export class VoiceCaptureModule {
   private readonly vad = new VADDetector()
   /** 事件退订列表 */
   private readonly unsubs: Array<() => void> = []
+  /** 会话完成等待器 */
+  private readonly completionWaiters = new Map<Session, { resolve: () => void }>()
 
   /** 当前语音设置快照 */
   private settings: VoiceDictationSettings | null = null
@@ -36,6 +40,10 @@ export class VoiceCaptureModule {
   private unsubVAD: (() => void) | null = null
   /** 免提开关状态 */
   private handsfreeEnabled = false
+  /** ASR 对外交互总线 */
+  private readonly transportBus = new VoiceAsrTransportBus()
+  /** ASR 对外交互模块 */
+  private readonly transportModule = new VoiceAsrTransportModule(this.transportBus)
 
   constructor(
     private readonly bus: VoiceDomainEventBus,
@@ -66,7 +74,10 @@ export class VoiceCaptureModule {
    */
   async stopRecording(): Promise<void> {
     if (!this.session) return
-    await this.session.stop().catch(() => '')
+    const session = this.session
+    const wait = this.waitForSessionCompletion(session)
+    await session.stop().catch(() => '')
+    await wait
   }
 
   /**
@@ -74,8 +85,10 @@ export class VoiceCaptureModule {
    */
   cancelSession(): void {
     if (!this.session) return
+    const session = this.session
     this.session.cancel()
     this.session = null
+    this.resolveSessionCompletion(session)
   }
 
   /**
@@ -91,6 +104,8 @@ export class VoiceCaptureModule {
   dispose(): void {
     this.unsubs.forEach((unsub) => unsub())
     this.disableHandsfree()
+    this.completionWaiters.clear()
+    this.transportModule.dispose()
   }
 
   /**
@@ -116,7 +131,10 @@ export class VoiceCaptureModule {
     this.handsfreeEnabled = true
     this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, { settings: this.settings! })
 
-    this.unsubVAD = this.hub.subscribe((frame: PcmFrame) => this.detectSpeech(frame))
+    this.unsubVAD = this.hub.subscribe((frame: PcmFrame) => {
+      this.session?.pushAudio(frame)
+      this.detectSpeech(frame)
+    })
   }
 
   /**
@@ -168,12 +186,7 @@ export class VoiceCaptureModule {
 
     const provider = this.createProvider()
     this.logger.info('启动新录音会话', { engine: this.settings.engine })
-    const session = new Session(
-      (sub) => this.hub.subscribe(sub),
-      this.vad,
-      provider,
-      this.settings,
-    )
+    const session = new Session(provider)
     this.bindSessionEvents(session, provider)
 
     this.session = session
@@ -193,21 +206,18 @@ export class VoiceCaptureModule {
       this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.transcript, { text, isFinal, provider }),
     )
     session.events.on(SESSION_EVENT_METADATA, (message) => this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.metadata, { message }))
-    session.events.on(SESSION_EVENT_COMPLETE, (result) => {
-      if (this.session !== session) {
-        this.logger.debug('忽略过期会话的完成事件')
-        return
-      }
-      this.session = null
-      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.complete, result)
+    session.events.on(SESSION_EVENT_COMPLETE, ({ text }) => {
+      void this.handleSessionComplete(session, text)
     })
     session.events.on(SESSION_EVENT_ERROR, (message) => {
       if (this.session !== session) {
         this.logger.debug('忽略过期会话的错误事件')
+        this.resolveSessionCompletion(session)
         return
       }
       this.session = null
       this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message })
+      this.resolveSessionCompletion(session)
     })
   }
 
@@ -216,6 +226,65 @@ export class VoiceCaptureModule {
    */
   private createProvider(): ASRProvider {
     const engine = this.settings?.engine || 'doubao'
-    return createASRProvider(engine)
+    return createASRProvider(engine, this.transportBus)
+  }
+
+  /**
+   * 处理会话完成：提交文本到主进程并广播领域事件。
+   */
+  private async handleSessionComplete(session: Session, text: string): Promise<void> {
+    if (this.session !== session) {
+      this.logger.debug('忽略过期会话的完成事件')
+      this.resolveSessionCompletion(session)
+      return
+    }
+
+    const trimmed = text.trim()
+    let commitMessage = ''
+
+    if (trimmed) {
+      try {
+        const result = await window.electronAPI.commitVoiceDictation({ text: trimmed })
+        commitMessage = result.message
+      } catch (error) {
+        this.logger.error('提交语音文本失败', {
+          error: error instanceof Error ? error.message : '未知错误',
+        })
+        this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message: '输出失败' })
+        this.session = null
+        this.resolveSessionCompletion(session)
+        return
+      }
+    }
+
+    this.session = null
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.complete, {
+      text: trimmed,
+      commitMessage,
+    })
+    this.resolveSessionCompletion(session)
+  }
+
+  /**
+   * 等待指定会话完成提交。
+   */
+  private waitForSessionCompletion(session: Session): Promise<void> {
+    return new Promise((resolve) => {
+      const existing = this.completionWaiters.get(session)
+      if (existing) {
+        existing.resolve()
+      }
+      this.completionWaiters.set(session, { resolve })
+    })
+  }
+
+  /**
+   * 结束指定会话的完成等待。
+   */
+  private resolveSessionCompletion(session: Session): void {
+    const waiter = this.completionWaiters.get(session)
+    if (!waiter) return
+    this.completionWaiters.delete(session)
+    waiter.resolve()
   }
 }

@@ -4,7 +4,6 @@
  * 提供单次录音会话的类型安全事件发布/订阅能力，替代回调对象注入。
  */
 
-import type { SessionResult } from '../../types/panel'
 import {
   SESSION_EVENT_COMPLETE,
   SESSION_EVENT_ERROR,
@@ -23,7 +22,7 @@ export interface SessionEventMap {
   /** 元数据消息（如连接状态） */
   [SESSION_EVENT_METADATA]: string
   /** 会话完成结果 */
-  [SESSION_EVENT_COMPLETE]: SessionResult
+  [SESSION_EVENT_COMPLETE]: { text: string }
   /** 会话错误信息 */
   [SESSION_EVENT_ERROR]: string
 }
