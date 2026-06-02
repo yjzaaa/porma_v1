@@ -46,6 +46,8 @@ export class Session {
   private commitMessage = ''
   /** 取消订阅函数数组（PCM 帧订阅等） */
   private subs: Array<() => void> = []
+  /** Provider 事件退订函数 */
+  private providerUnsubs: Array<() => void> = []
   /** 最近一次感知到非静音的时间戳（performance.now） */
   private silenceSince = 0
   /** 本次录音开始时间戳 */
@@ -73,7 +75,7 @@ export class Session {
    * 启动录音会话
    *
    * 流程：
-   *   1. 订阅 PCM 帧 → 实时音量回调 + VAD 静音检测
+   *   1. 订阅 PCM 帧 → 实时音量通知 + VAD 静音检测
    *   2. 记录录音开始时间
    *   3. 启动已注入的 ASR Provider
    *
@@ -109,25 +111,10 @@ export class Session {
     const provider = this.provider
     if (!provider) return
 
+    this.bindProviderEvents(provider)
+
     try {
-      await provider.start({
-        onTranscript: (text: string, isFinal: boolean) => {
-          if (this._disposed) return
-          this.transcript = text
-          this.events.emit(SESSION_EVENT_TRANSCRIPT, { text, isFinal })
-        },
-        onState: (_s: string, msg?: string) => {
-          if (msg) this.events.emit(SESSION_EVENT_METADATA, msg)
-        },
-        onVolume: (p: number) => this.events.emit(SESSION_EVENT_VOLUME, p),
-        onEnd: (text: string) => {
-          // Provider 端主动结束时（如 WebSpeech 自动断连）直接完成
-          if (text && !this._disposed) this.completeRecording()
-        },
-        onError: (msg: string) => {
-          if (!this._disposed)           this.events.emit(SESSION_EVENT_ERROR, msg)
-        },
-      })
+      await provider.start()
     } catch {
       if (!this._disposed) this.events.emit(SESSION_EVENT_ERROR, 'ASR 引擎启动失败')
     }
@@ -193,9 +180,43 @@ export class Session {
    */
   dispose(): void {
     this._disposed = true
+    for (const unsub of this.providerUnsubs) unsub()
+    this.providerUnsubs = []
     this.provider?.dispose(); this.provider = null
     for (const unsub of this.subs) unsub()
     this.subs = []
     this.events.clear()
+  }
+
+  /**
+   * 绑定 Provider 事件到 Session 事件
+   */
+  private bindProviderEvents(provider: ASRProvider): void {
+    this.providerUnsubs.push(
+      provider.onEvent((event) => {
+        if (this._disposed) return
+
+        switch (event.type) {
+          case 'state':
+            if (event.message) this.events.emit(SESSION_EVENT_METADATA, event.message)
+            return
+          case 'transcript':
+            this.transcript = event.text
+            this.events.emit(SESSION_EVENT_TRANSCRIPT, { text: event.text, isFinal: event.isFinal })
+            return
+          case 'volume':
+            this.events.emit(SESSION_EVENT_VOLUME, event.peak)
+            return
+          case 'end':
+            if (event.text) {
+              this.transcript = event.text
+              this.completeRecording()
+            }
+            return
+          case 'error':
+            this.events.emit(SESSION_EVENT_ERROR, event.message)
+        }
+      }),
+    )
   }
 }

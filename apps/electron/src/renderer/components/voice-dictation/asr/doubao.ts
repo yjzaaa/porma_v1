@@ -19,7 +19,8 @@
  * @see ../core/runtime/AudioHub.ts - 环形缓冲（用于免提回取）
  */
 
-import type { ASRProvider, ASRCallbacks } from '../types/asr'
+import type { ASRProvider, ASREventListener } from '../types/asr'
+import { ASREventBus } from '../types/asr'
 import type { VoiceDictationSettings, VoiceDictationStateEvent, VoiceDictationTranscriptEvent } from '../../../../types'
 import { CHUNK_BYTES, concatAudioBuffers, floatTo16BitPcm, splitChunk } from '../utils/pcm'
 import {
@@ -33,6 +34,8 @@ import {
 const ACTX = (window as any).AudioContext ?? (window as any).webkitAudioContext as typeof AudioContext | undefined
 
 export class DoubaoProvider implements ASRProvider {
+  /** ASR 事件总线 */
+  private readonly eventBus = new ASREventBus()
   /** 日志事件发射器 */
   private readonly eventEmitter = new VoiceLogEventEmitter()
   /** 统一日志适配器（事件驱动） */
@@ -59,8 +62,6 @@ export class DoubaoProvider implements ASRProvider {
   private queuedAudio: ArrayBuffer[] = []
   /** 是否正在停止中（阻止新数据处理） */
   private stopping = false
-  /** 外部回调引用 */
-  private callbacks: ASRCallbacks | null = null
   /** stop() 的 resolve 函数（预留） */
   private resolveStop: ((text: string) => void) | null = null
   /** 主进程返回的累积转写文本 */
@@ -74,8 +75,15 @@ export class DoubaoProvider implements ASRProvider {
   /** IPC 监听器清理函数 */
   private cleanupListeners: (() => void) | null = null
 
-  onEvent(listener: VoiceLogEventListener): () => void {
-    return this.eventEmitter.onEvent(listener)
+  onEvent(listener: ASREventListener): () => void {
+    const unsubs = [
+      this.eventBus.on('state', listener),
+      this.eventBus.on('transcript', listener),
+      this.eventBus.on('volume', listener),
+      this.eventBus.on('end', listener),
+      this.eventBus.on('error', listener),
+    ]
+    return () => unsubs.forEach((unsub) => unsub())
   }
 
   /**
@@ -91,8 +99,7 @@ export class DoubaoProvider implements ASRProvider {
    * IPC 事件通过 sessionId 守卫：只有匹配当前会话的事件才被处理，
    * 防止快速连续录音时消息交叉。
    */
-  async start(callbacks: ASRCallbacks): Promise<void> {
-    this.callbacks = callbacks
+  async start(): Promise<void> {
     this.stopping = false
     this.asrReady = false
     this.pendingAudio = []
@@ -101,10 +108,16 @@ export class DoubaoProvider implements ASRProvider {
 
     // 步骤 1: 检查麦克风权限
     const perm = await window.electronAPI.checkMicrophonePermission()
-    if (perm.status === 'denied') { callbacks.onError?.('麦克风权限被阻止'); return }
+    if (perm.status === 'denied') {
+      this.eventBus.emit('error', { message: '麦克风权限被阻止' })
+      return
+    }
     if (perm.status === 'not-determined') {
       const req = await window.electronAPI.requestMicrophonePermission()
-      if (req.status !== 'granted') { callbacks.onError?.('需要麦克风权限'); return }
+      if (req.status !== 'granted') {
+        this.eventBus.emit('error', { message: '需要麦克风权限' })
+        return
+      }
     }
 
     const sid = crypto.randomUUID()
@@ -127,13 +140,13 @@ export class DoubaoProvider implements ASRProvider {
       }
       
       this.transcriptText = e.text
-      callbacks.onTranscript(e.text, e.isFinal)
+      this.eventBus.emit('transcript', { text: e.text, isFinal: e.isFinal })
     })
     unsubs.push(ct)
 
     const cs = window.electronAPI.onVoiceDictationState((e: VoiceDictationStateEvent) => {
       if (e.sessionId && e.sessionId !== this.sessionId) return
-      if (e.message) callbacks.onState(e.status, e.message)
+      this.eventBus.emit('state', { state: e.status, message: e.message })
       if (this.stopping && (e.status === 'idle' || e.status === 'completed' || e.status === 'error')) {
         this.resolveStopWait()
       }
@@ -143,7 +156,7 @@ export class DoubaoProvider implements ASRProvider {
     this.cleanupListeners = () => unsubs.forEach(f => f())
 
     // 步骤 3: 通知主进程启动 ASR
-    callbacks.onState('connecting', '连接 ASR...')
+    this.eventBus.emit('state', { state: 'connecting', message: '连接 ASR...' })
     await window.electronAPI.startVoiceDictation({ sessionId: sid })
     if (this.sessionId !== sid) return // 已被 cancel/stop 拦截
     this.asrReady = true
@@ -195,7 +208,7 @@ export class DoubaoProvider implements ASRProvider {
         const inp = ev.inputBuffer.getChannelData(0)
         let peak = 0
         for (let i = 0; i < inp.length; i++) peak = Math.max(peak, Math.abs(inp[i] ?? 0))
-        this.callbacks?.onVolume?.(Math.min(1, peak * 4))
+        this.eventBus.emit('volume', { peak: Math.min(1, peak * 4) })
 
         const pcm = floatTo16BitPcm(inp, ac.sampleRate)
         this.pendingAudio.push(pcm)
@@ -214,7 +227,7 @@ export class DoubaoProvider implements ASRProvider {
       src.connect(proc); proc.connect(ac.destination)
       if (ac.state === 'suspended') await ac.resume()
     } catch {
-      this.callbacks?.onError?.('麦克风启动失败')
+      this.eventBus.emit('error', { message: '麦克风启动失败' })
     }
   }
 
@@ -293,9 +306,9 @@ export class DoubaoProvider implements ASRProvider {
     this.cancel().catch(() => {})
     this.sessionId = null
     this.asrReady = false
-    this.callbacks = null
     this.currentDefinite = undefined
     this.currentUtterances = undefined
+    this.eventBus.clear()
     this.eventLogger.dispose()
   }
 

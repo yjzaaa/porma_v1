@@ -17,7 +17,8 @@
  * @see ../types/asr.ts - ASRProvider 接口定义
  */
 
-import type { ASRProvider, ASRCallbacks } from '../types/asr'
+import type { ASRProvider, ASREventListener } from '../types/asr'
+import { ASREventBus } from '../types/asr'
 import {
   createVoiceEventLogger,
   VoiceLogEventEmitter,
@@ -44,6 +45,8 @@ const SpeechCtor = ((window as any).SpeechRecognition ?? (window as any).webkitS
   (new () => SpeechRecognition_) | undefined
 
 export class WebSpeechProvider implements ASRProvider {
+  /** ASR 事件总线 */
+  private readonly eventBus = new ASREventBus()
   /** 日志事件发射器 */
   private readonly eventEmitter = new VoiceLogEventEmitter()
   /** 统一日志适配器（事件驱动） */
@@ -52,8 +55,6 @@ export class WebSpeechProvider implements ASRProvider {
   private readonly eventLogger = new VoiceLogEventSubscriber('WebSpeech', this.eventEmitter)
   /** 当前 Recognition 实例 */
   private recognition: SpeechRecognition_ | null = null
-  /** 外部回调引用 */
-  private callbacks: ASRCallbacks | null = null
   /** 累积的最终识别文本 */
   private finalText = ''
   /** 是否已释放 */
@@ -61,18 +62,28 @@ export class WebSpeechProvider implements ASRProvider {
   /** 是否为用户主动停止（用于 onend 时区分正常结束和用户打断） */
   private userStopped = false
 
-  onEvent(listener: VoiceLogEventListener): () => void {
-    return this.eventEmitter.onEvent(listener)
+  onEvent(listener: ASREventListener): () => void {
+    const unsubs = [
+      this.eventBus.on('state', listener),
+      this.eventBus.on('transcript', listener),
+      this.eventBus.on('volume', listener),
+      this.eventBus.on('end', listener),
+      this.eventBus.on('error', listener),
+    ]
+    return () => unsubs.forEach((unsub) => unsub())
   }
 
   /**
    * 启动 Web Speech 语音识别
    *
-   * 浏览器不支持时直接通过 onError 回调通知，不抛异常。
+   * 浏览器不支持时直接通过 error 事件通知，不抛异常。
    */
-  async start(callbacks: ASRCallbacks): Promise<void> {
-    if (!SpeechCtor) { callbacks.onError?.('浏览器不支持 SpeechRecognition'); return }
-    this.callbacks = callbacks; this.finalText = ''; this.disposed = false
+  async start(): Promise<void> {
+    if (!SpeechCtor) {
+      this.eventBus.emit('error', { message: '浏览器不支持 SpeechRecognition' })
+      return
+    }
+    this.finalText = ''; this.disposed = false
     this.startSession()
   }
 
@@ -81,10 +92,10 @@ export class WebSpeechProvider implements ASRProvider {
    *
    * 配置：continuous + interimResults + zh-CN
    * onresult：区分 final（已稳定）和 interim（临时）结果
-   * onend：非用户主动停止时触发 onEnd 回调
+   * onend：非用户主动停止时触发 end 事件
    */
   private startSession(): void {
-    if (this.disposed || !this.callbacks || !SpeechCtor) return
+    if (this.disposed || !SpeechCtor) return
     const r = new SpeechCtor()
     this.recognition = r
     r.continuous = true; r.interimResults = true; r.lang = 'zh-CN'; r.maxAlternatives = 1
@@ -125,23 +136,28 @@ export class WebSpeechProvider implements ASRProvider {
           interimLength: interim.length
         })
 
-        this.callbacks?.onTranscript(enhancedResult, isEnhancedFinal)
+        this.eventBus.emit('transcript', { text: enhancedResult, isFinal: isEnhancedFinal })
       }
     }
 
     r.onerror = (ev: any) => {
       if (this.disposed) return
       if (ev.error === 'no-speech' || ev.error === 'aborted') return
-      this.callbacks?.onError?.(`识别错误: ${ev.error}`)
+      this.eventBus.emit('error', { message: `识别错误: ${ev.error}` })
     }
 
     r.onend = () => {
       if (this.disposed) return
-      // 非用户主动停止 → 视为 Provider 端正常结束，触发 onEnd 回调
-      if (!this.userStopped) this.callbacks?.onEnd?.(this.finalText.trim())
+      // 非用户主动停止 → 视为 Provider 端正常结束，触发 end 事件
+      if (!this.userStopped) this.eventBus.emit('end', { text: this.finalText.trim() })
     }
 
-    try { r.start() } catch { this.callbacks?.onError?.('启动失败') }
+    try {
+      this.eventBus.emit('state', { state: 'connecting', message: '连接识别引擎...' })
+      r.start()
+    } catch {
+      this.eventBus.emit('error', { message: '启动失败' })
+    }
   }
 
   /** 主动停止识别，返回最终累积文本 */
@@ -163,7 +179,8 @@ export class WebSpeechProvider implements ASRProvider {
   dispose(): void {
     this.disposed = true
     try { this.recognition?.abort() } catch {}
-    this.recognition = null; this.callbacks = null
+    this.recognition = null
+    this.eventBus.clear()
     this.eventLogger.dispose()
   }
 

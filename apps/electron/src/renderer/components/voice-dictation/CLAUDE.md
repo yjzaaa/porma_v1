@@ -26,12 +26,18 @@ flowchart TB
     end
 
     subgraph runtime["运行时能力"]
-        audio["core/runtime/AudioHub.ts"]
-        vad["core/runtime/VADDetector.ts"]
-        session["core/runtime/Session.ts"]
+        audio["core/runtime/AudioHub.ts<br/>PCM 采集与帧广播"]
+        vad["core/runtime/VADDetector.ts<br/>语音活动检测"]
+        session["core/runtime/Session.ts<br/>会话编排 + Provider 事件桥接"]
         fsm["core/state/VoiceStateMachine.ts"]
         queue["core/state/StateTransitionQueue.ts"]
-        asr["asr/factory.ts + asr/*Provider.ts"]
+    end
+
+    subgraph asr["ASR 层"]
+        factory["asr/factory.ts<br/>Provider 工厂"]
+        doubao["asr/doubao.ts<br/>豆包 ASR 传输适配器（事件驱动）"]
+        webspeech["asr/webspeech.ts<br/>WebSpeech 适配器（事件驱动）"]
+        asrbus["types/asr.ts<br/>ASR 事件总线 + Provider 接口"]
     end
 
     panel --> orch
@@ -47,7 +53,10 @@ flowchart TB
     capture --> audio
     capture --> vad
     capture --> session
-    capture --> asr
+    capture --> asrbus
+    session --> asrbus
+    factory --> doubao
+    factory --> webspeech
 
     state --> fsm
     state --> queue
@@ -133,12 +142,13 @@ sequenceDiagram
 | `core/modules/VoiceAgentModule.ts` | Agent 状态桥接，提供 `AgentContext` |
 | `core/runtime/AudioHub.ts` | 麦克风 PCM 采集与帧广播 |
 | `core/runtime/VADDetector.ts` | 自适应语音活动检测 |
-| `core/runtime/Session.ts` | 单轮录音会话生命周期 |
+| `core/runtime/Session.ts` | 单轮录音会话生命周期 + Provider 事件桥接 |
 | `core/state/VoiceStateMachine.ts` | 语音状态机 |
 | `core/state/StateTransitionQueue.ts` | 状态迁移排队执行 |
 | `asr/factory.ts` | ASR Provider 工厂 |
-| `asr/doubao.ts` | 豆包 ASR Provider |
-| `asr/webspeech.ts` | WebSpeech Provider |
+| `asr/doubao.ts` | 豆包 ASR 传输适配器（事件驱动） |
+| `asr/webspeech.ts` | WebSpeech 传输适配器（事件驱动） |
+| `types/asr.ts` | ASR Provider 接口与 ASR 事件总线 |
 | `ui-events/voice-dictation-events.ts` | UI 侧全局事件（设置变更、自动发送请求） |
 | `ui-events/log-events.ts` | 日志事件发射/订阅工具 |
 
