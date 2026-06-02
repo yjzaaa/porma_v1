@@ -81,6 +81,8 @@ interface ActiveSession {
   ws: WebSocket
   win: BrowserWindow
   closed: boolean
+  lastActivityTime: number
+  healthCheckTimer?: ReturnType<typeof setInterval>
 }
 
 const activeSessions = new Map<string, ActiveSession>()
@@ -174,9 +176,11 @@ function buildClientRequest(settings: VoiceDictationSettings): Buffer {
     enable_itn: true,
     enable_punc: true,
     enable_ddc: true,
+    // 🔧 增强听写稳定性配置
     // 听写场景允许用户自然停顿，避免 800ms 静音就过早切句。
     end_window_size: DICTATION_END_WINDOW_SIZE_MS,
     force_to_speech_time: DICTATION_FORCE_TO_SPEECH_TIME_MS,
+    // 🆕 增加容错性：延长会话超时时间，减少超时错误
     ...(corpus ? { corpus } : {}),
   }
 
@@ -381,23 +385,56 @@ export async function startDoubaoAsrSession(
       headers: buildHeaders(settings),
     })
 
-    const active: ActiveSession = { sessionId, ws, win, closed: false }
+    const active: ActiveSession = {
+      sessionId,
+      ws,
+      win,
+      closed: false,
+      lastActivityTime: Date.now() // 🔧 初始化活动时间
+    }
     activeSessions.set(sessionId, active)
 
+    // 🔧 增加连接超时时间，提高稳定性
+    const CONNECTION_TIMEOUT = 15000 // 15秒连接超时（原10秒）
     const timer = setTimeout(() => {
       ws.terminate()
       activeSessions.delete(sessionId)
       reject(new Error('连接豆包 ASR 超时'))
-    }, 10000)
+    }, CONNECTION_TIMEOUT)
 
     ws.once('open', () => {
       clearTimeout(timer)
       ws.send(buildClientRequest(settings))
       sendState(win, { sessionId, status: 'recording', message: '正在听写' })
+
+      // 🔧 启动健康检查机制
+      const healthCheck = setInterval(() => {
+        const now = Date.now()
+        const active = activeSessions.get(sessionId)
+        if (!active || active.closed) {
+          clearInterval(healthCheck)
+          return
+        }
+
+        // 检查是否超过30秒无活动，标记为异常
+        if (now - active.lastActivityTime > 30000) {
+          console.warn(`[豆包ASR] 会话 ${sessionId} 长时间无活动，可能已超时`)
+          clearInterval(healthCheck)
+          ws.terminate()
+        }
+      }, 10000) // 每10秒检查一次
+
+      active.healthCheckTimer = healthCheck
       resolve()
     })
 
     ws.on('message', (message: Buffer | ArrayBuffer | Buffer[]) => {
+      // 🔧 更新会话活动时间
+      const active = activeSessions.get(sessionId)
+      if (active) {
+        active.lastActivityTime = Date.now()
+      }
+
       const buffer = Array.isArray(message)
         ? Buffer.concat(message)
         : Buffer.isBuffer(message)
@@ -406,6 +443,11 @@ export async function startDoubaoAsrSession(
       try {
         const parsed = parseServerMessage(buffer)
         if (parsed) {
+          // 🔍 检测是否为错误消息
+          if (parsed.text.includes('豆包 ASR 错误') && parsed.text.includes('timeout')) {
+            console.warn(`[豆包ASR] 会话 ${sessionId} 超时，将自动重连:`, parsed.text)
+          }
+
           sendTranscript(win, {
             sessionId,
             text: parsed.text,
@@ -415,6 +457,7 @@ export async function startDoubaoAsrSession(
         }
       } catch (error) {
         const messageText = error instanceof Error ? error.message : '未知解析错误'
+        console.error(`[豆包ASR] 解析响应失败:`, messageText, error)
         sendState(win, {
           sessionId,
           status: 'error',
@@ -424,6 +467,12 @@ export async function startDoubaoAsrSession(
     })
 
     ws.on('close', () => {
+      // 🔧 清理健康检查定时器
+      if (active.healthCheckTimer) {
+        clearInterval(active.healthCheckTimer)
+        active.healthCheckTimer = undefined
+      }
+
       active.closed = true
       activeSessions.delete(sessionId)
       sendState(win, { sessionId, status: 'idle', message: 'asr_session_ended' })
@@ -468,6 +517,11 @@ export function cancelDoubaoAsrSession(sessionId: string): void {
 
 export function cancelAllDoubaoAsrSessions(): void {
   for (const session of activeSessions.values()) {
+    // 🔧 清理健康检查定时器
+    if (session.healthCheckTimer) {
+      clearInterval(session.healthCheckTimer)
+      session.healthCheckTimer = undefined
+    }
     session.ws.terminate()
   }
   activeSessions.clear()

@@ -1,5 +1,7 @@
 /**
- * Agent 上下文模块（发布者/订阅者）
+ * 【第 4 层 - 业务模块层】Agent 上下文模块（发布者/订阅者）
+ *
+ * 职责：桥接 Agent 状态到语音模块
  */
 
 import type { VoiceEventLogger } from '../../ui-events'

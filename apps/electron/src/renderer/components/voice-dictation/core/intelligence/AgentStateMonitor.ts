@@ -8,13 +8,13 @@ import {
 } from '../../ui-events'
 
 /**
- * Agent状态监听器
- * 
+ * 【第 3 层 - 智能决策层】Agent 状态监听器
+ *
  * 核心职责:
- *   1. 实时监听Agent对话状态
- *   2. 精确检测Agent循环状态
+ *   1. 实时监听 Agent 对话状态
+ *   2. 精确检测 Agent 循环状态
  *   3. 判断用户输入时机
- *   4. 提供Agent上下文信息
+ *   4. 提供 Agent 上下文信息
  */
 export class AgentStateMonitor {
   private readonly eventEmitter = new VoiceLogEventEmitter()

@@ -1,5 +1,7 @@
 /**
- * 动作处理模块（动作事件 -> 具体执行）
+ * 【第 4 层 - 业务模块层】动作处理模块（动作事件 -> 具体执行）
+ *
+ * 职责：执行发送文本、处理即时指令、停止 Agent
  */
 
 import type { VoiceEventLogger } from '../../ui-events'
@@ -39,6 +41,10 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
   }
 
   private handleSendVoiceText(text: string, reasoning: string): void {
+    this.logger.info('🎯 ActionModule 收到发送文本事件', {
+      textLength: text.length,
+      reasoning,
+    })
     this.logger.info('开始发送语音到Agent', {
       text: `${text.substring(0, 20)}${text.length > 20 ? '...' : ''}`,
       reasoning,

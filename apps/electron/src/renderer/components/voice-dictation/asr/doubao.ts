@@ -1,5 +1,5 @@
 /**
- * 语音模块 — 豆包 ASR Provider
+ * 【第 7 层 - ASR Provider 层】豆包 ASR Provider
  *
  * 基于豆包流式语音识别服务的实现，通过统一外部交互层与主进程通信。
  *

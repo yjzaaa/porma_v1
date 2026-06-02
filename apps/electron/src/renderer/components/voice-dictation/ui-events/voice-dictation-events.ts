@@ -27,7 +27,12 @@ const settingsChangedListeners = new Set<VoiceSettingsChangedListener>()
  */
 export function emitVoiceAutoSendRequested(detail: VoiceAutoSendRequestedDetail): void {
   for (const listener of autoSendListeners) {
-    listener(detail)
+    try {
+      listener(detail)
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('[VoiceDictation-Events] listener 执行失败', error)
+    }
   }
 }
 

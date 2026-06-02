@@ -1,5 +1,7 @@
 /**
- * 智能决策模块（ASR 结果 -> 决策事件）
+ * 【第 4 层 - 业务模块层】智能决策模块（ASR 结果 -> 决策事件）
+ *
+ * 职责：将 ASR 转写结果转换为发送决策
  */
 
 import type { ASRProvider } from '../../types/asr'
@@ -65,6 +67,10 @@ export class VoiceDecisionModule extends BaseVoiceModule {
    */
   private handleTranscript(text: string, isFinal: boolean | undefined, provider: ASRProvider): void {
     // === 📥 第1步：接收转写结果 ===
+    this.logger.info('🧠 DecisionModule.handleTranscript 被调用', {
+      text: this.formatText(text),
+      isFinal,
+    })
     this.logger.info('📥 收到转写结果', {
       text: this.formatText(text),
       isFinal,
@@ -111,6 +117,10 @@ export class VoiceDecisionModule extends BaseVoiceModule {
       this.markSent(text)
 
       // 发布执行命令
+      this.logger.info('🧠 DecisionModule 发出决策执行事件', {
+        sendStrategy: decision.sendStrategy,
+        text: this.formatText(text),
+      })
       this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text })
     }
   }
@@ -163,17 +173,33 @@ export class VoiceDecisionModule extends BaseVoiceModule {
 
   /**
    * 构建统一 ASR 结果对象
+   *
+   * 优化：尝试预计算 isComplete 字段，避免每次都重新判断
    */
   private buildASRResult(
     text: string,
     isFinal: boolean | undefined,
     provider: ASRProvider,
   ): UnifiedASRResult {
+    // 🔧 尝试预计算完整性（如果 isFinal 为 true，通常表示完整）
+    let isComplete = false
+    if (isFinal === true) {
+      isComplete = true
+    } else {
+      // 对于非 final 结果，也可以做启发式判断
+      const trimmed = text.trim()
+      const hasEndingPunctuation = /[。！？.!?]$/.test(trimmed)
+      const hasMinimumLength = trimmed.length >= 5
+      if (hasEndingPunctuation && hasMinimumLength) {
+        isComplete = true
+      }
+    }
+
     return {
       text,
       isFinal: isFinal || false,
       confidence: 0.8,
-      isComplete: false,
+      isComplete,  // 🔧 使用预计算的值
       asrType: this.currentEngine,
       metadata: this.extractASRMetadata(provider),
     }

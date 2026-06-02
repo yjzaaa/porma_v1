@@ -1,5 +1,7 @@
 /**
- * 语音采集模块（AudioHub + VAD + Session）
+ * 【第 4 层 - 业务模块层】语音采集模块（AudioHub + VAD + Session）
+ *
+ * 职责：管理麦克风采集、VAD 检测、录音会话生命周期
  */
 
 import type { VoiceEventLogger } from '../../ui-events'
@@ -7,7 +9,7 @@ import type { VoiceDictationSettings } from '@/types/settings'
 import type { ASRProvider } from '../../types/asr'
 import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
 import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
-import { VoiceAsrTransportBus } from '../bus/VoiceAsrTransportBus'
+import type { VoiceAsrTransportBus } from '../bus/VoiceAsrTransportBus'
 import type { PcmFrame } from '../../types/panel'
 import { createASRProvider } from '../../asr/factory'
 import { AudioHub } from '../runtime/AudioHub'
@@ -20,7 +22,6 @@ import {
   SESSION_EVENT_TRANSCRIPT,
   SESSION_EVENT_VOLUME,
 } from '../bus/SessionEventKeys'
-import { VoiceAsrTransportModule } from './VoiceAsrTransportModule'
 import { BaseVoiceModule } from './BaseVoiceModule'
 
 export class VoiceCaptureModule extends BaseVoiceModule {
@@ -39,16 +40,16 @@ export class VoiceCaptureModule extends BaseVoiceModule {
   private unsubVAD: (() => void) | null = null
   /** 免提开关状态 */
   private handsfreeEnabled = false
-  /** ASR 对外交互总线 */
-  private readonly transportBus = new VoiceAsrTransportBus()
-  /** ASR 对外交互模块 */
-  private readonly transportModule = new VoiceAsrTransportModule(this.transportBus)
+  /** ASR 对外交互总线（由外部注入） */
+  private readonly transportBus: VoiceAsrTransportBus
 
   constructor(
     bus: VoiceDomainEventBus,
     logger: VoiceEventLogger,
+    transportBus: VoiceAsrTransportBus,
   ) {
     super(bus, logger)
+    this.transportBus = transportBus
 
     // === 订阅免提切换命令 ===
     this.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
@@ -113,7 +114,6 @@ export class VoiceCaptureModule extends BaseVoiceModule {
     this.disposeSubscriptions()
     this.disableHandsfree()
     this.completionWaiters.clear()
-    this.transportModule.dispose()
   }
 
   /**
@@ -251,9 +251,10 @@ export class VoiceCaptureModule extends BaseVoiceModule {
    */
   private bindSessionEvents(session: Session, provider: ASRProvider): void {
     session.events.on(SESSION_EVENT_VOLUME, (peak) => this.emit(VOICE_DOMAIN_EVENT_KEYS.session.volume, { peak }))
-    session.events.on(SESSION_EVENT_TRANSCRIPT, ({ text, isFinal }) =>
-      this.emit(VOICE_DOMAIN_EVENT_KEYS.session.transcript, { text, isFinal, provider }),
-    )
+    session.events.on(SESSION_EVENT_TRANSCRIPT, ({ text, isFinal }) => {
+      this.logger.debug('🎤 CaptureModule 收到转写事件', { text: text.substring(0, 20), isFinal })
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.session.transcript, { text, isFinal, provider })
+    })
     session.events.on(SESSION_EVENT_METADATA, (message) => this.emit(VOICE_DOMAIN_EVENT_KEYS.session.metadata, { message }))
     session.events.on(SESSION_EVENT_COMPLETE, ({ text }) => {
       void this.handleSessionComplete(session, text)

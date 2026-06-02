@@ -1,5 +1,7 @@
 /**
- * 语音领域事件总线（统一发布/订阅 seam）
+ * 【第 6 层 - 基础设施层】语音领域事件总线（统一发布/订阅）
+ *
+ * 职责：提供类型安全的事件发布/订阅机制，连接各业务模块
  */
 
 import type { VoiceDictationSettings } from '@/types/settings'

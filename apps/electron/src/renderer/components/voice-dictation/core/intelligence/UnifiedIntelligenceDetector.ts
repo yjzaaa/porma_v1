@@ -1,10 +1,10 @@
 /**
- * 统一智能检测器
+ * 【第 3 层 - 智能决策层】统一智能检测器
  *
  * 核心职责:
- *   1. 适配豆包ASR和WebSpeech的能力差异
- *   2. 豆包ASR：充分利用definite字段 + 宽松判断
- *   3. WebSpeech：基于isFinal + 启发式增强
+ *   1. 适配豆包 ASR 和 WebSpeech 的能力差异
+ *   2. 豆包 ASR：充分利用 definite 字段 + 宽松判断
+ *   3. WebSpeech：基于 isFinal + 启发式增强
  *   4. 即时指令识别（通用）
  */
 import type { UnifiedASRResult, AgentContext, IntelligentDecision } from '../../types/intelligence'
@@ -27,8 +27,17 @@ export class UnifiedIntelligenceDetector {
 
   /**
    * 判断语音是否完整
+   *
+   * 关键修复：优先使用预计算的 isComplete 字段，避免重复判断
+   * 这对于会话完成时的兜底决策尤其重要
    */
   isSpeechComplete(result: UnifiedASRResult): boolean {
+    // 🔧 优先使用预计算的完整性结果（如兜底决策中已设置为 true）
+    if (result.isComplete === true) {
+      this.logger.info('使用预计算的完整性结果', { isComplete: true, text: result.text })
+      return true
+    }
+
     this.logger.info('开始语音完整性判断', {
       asrType: result.asrType,
       text: result.text,

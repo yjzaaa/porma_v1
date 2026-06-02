@@ -1,5 +1,5 @@
 /**
- * 决策动作分发模块（决策事件 -> 动作事件）
+ * 【第 4 层 - 业务模块层】决策动作分发模块（决策事件 -> 动作事件）
  *
  * 职责：根据决策的发送策略，分发到不同的动作处理器
  */
@@ -40,7 +40,7 @@ export class VoiceCommandExecutionModule extends BaseVoiceModule {
    */
   private executeDecision(decision: IntelligentDecision, text: string): void {
     // === 🎯 第1步：接收决策结果 ===
-    this.logger.info('🎯 收到决策执行', {
+    this.logger.info('⚡ CommandModule 收到决策执行', {
       sendStrategy: decision.sendStrategy,
       text: this.formatText(text),
       reasoning: decision.reasoning,

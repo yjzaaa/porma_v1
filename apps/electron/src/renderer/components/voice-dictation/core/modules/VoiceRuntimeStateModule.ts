@@ -1,5 +1,7 @@
 /**
- * 语音状态投影模块（唯一状态写入口）
+ * 【第 4 层 - 业务模块层】语音状态投影模块（唯一状态写入口）
+ *
+ * 职责：管理 UI 状态机，提供 UI 状态订阅接口
  */
 
 import type { VoiceDictationSettings } from '@/types/settings'

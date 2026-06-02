@@ -1,11 +1,9 @@
 /**
- * VoiceFloatingPanel — 语音听写浮动面板 UI
+ * 【表示层】语音听写浮动面板 UI
  *
- * 纯状态观察者模式：
- *   1. 创建 Orchestrator 实例
- *   2. 订阅 UIState 变更 → setState 驱动渲染
- *   3. 桥接 Agent 上下文到 Orchestrator（不在 UI 做业务决策）
- *   4. 监听语音设置变更事件、IPC 快捷键停止事件
+ * 职责：
+ * - 纯 UI 渲染组件
+ * - 通过 useVoiceOrchestrator Hook 获取状态和操作方法
  *
  * 渲染方式：React Portal 到 document.body，z-index 9999，始终浮动。
  *
@@ -14,105 +12,20 @@
  *   - recording: 340px 卡片，含图标 + 转录文本 + REC 指示灯 + 音量条
  *   - processing / completed / error: 卡片式结果展示
  *
- * @see ../core/orchestrator/Orchestrator.ts - 状态管理和自动发送回调
+ * @see ../hooks/useVoiceOrchestrator.ts - 业务逻辑封装
  */
 
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { useStore } from 'jotai'
 import { Loader2, Check } from 'lucide-react'
-import { Orchestrator } from '../core/orchestrator/Orchestrator'
+import { useVoiceOrchestrator } from '../hooks/useVoiceOrchestrator'
 import type { VoiceUIState } from '../types/panel'
-import { currentAgentSessionIdAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
-import { appModeAtom } from '@/atoms/app-mode'
-import { onVoiceSettingsChanged } from '../ui-events'
 
+/**
+ * 语音浮动面板组件
+ */
 export function VoiceFloatingPanel(): React.ReactElement {
-  const store = useStore()
-  /** UI 状态（由 Orchestrator 的 emit 驱动更新） */
-  const [ui, setUI] = React.useState<VoiceUIState>({
-    state: 'stopped', volume: 0, transcript: '', message: '', settings: null,
-  })
-
-  /**
-   * 初始化 Orchestrator 并桥接状态
-   *
-   * 执行顺序：
-   *   1. 创建 Orchestrator
-   *   2. 订阅 UIState 变更 → setUI
-   *   3. 加载语音设置并切换免提
-   *   4. 同步 Agent 上下文到 Orchestrator（状态桥接）
-   *   5. 监听 proma:voice-settings-changed 事件（设置页变更时动态切换）
-   *   6. 监听 onVoiceDictationToggleStop（快捷键停止录音）
-   *   7. 清理：取消订阅 → 销毁所有组件
-   */
-  React.useEffect(() => {
-    const orch = new Orchestrator()
-
-    // 订阅 UI 状态变更
-    const unsub = orch.onUIState((s) => setUI({ ...s }))
-
-    // 加载语音设置并初始化
-    window.electronAPI.getVoiceDictationSettings().then(s => {
-      orch.toggleHandsfree(s).catch(() => {})
-    }).catch(() => {})
-
-    // 同步 Agent 上下文到 Orchestrator（UI 仅负责桥接状态，不做决策）
-    const syncAgentContext = () => {
-      try {
-        const streamingStates = store.get(agentStreamingStatesAtom)
-        const sessionId = store.get(currentAgentSessionIdAtom)
-        const mode = store.get(appModeAtom)
-        const activeState = sessionId ? streamingStates.get(sessionId) : undefined
-        const normalizedMode = mode === 'agent' ? 'agent' : 'chat'
-
-        orch.setCurrentAgentSessionId(mode === 'agent' ? (sessionId ?? null) : null)
-        orch.updateAgentState({
-          mode: normalizedMode,
-          status: activeState?.running ? 'processing' : 'idle',
-          streamingState: {
-            running: activeState?.running ?? false,
-            content: activeState?.content ?? '',
-            toolActivities: activeState?.toolActivities?.map((activity) => activity.toolName) ?? [],
-          },
-          hasError: false,
-          recentMessages: [],
-          lastUserMessageTime: Date.now(),
-        })
-      } catch (error) {
-        console.error('[VoiceFloatingPanel] 同步Agent上下文失败:', error)
-      }
-    }
-
-    const unsubscribeStreaming = store.sub(agentStreamingStatesAtom, syncAgentContext)
-    const unsubscribeSession = store.sub(currentAgentSessionIdAtom, syncAgentContext)
-    const unsubscribeMode = store.sub(appModeAtom, syncAgentContext)
-    syncAgentContext()
-
-    // 监听设置变更事件（设置页修改时同步）
-    const handler = () => {
-      window.electronAPI.getVoiceDictationSettings().then(s => {
-        orch.toggleHandsfree(s).catch(() => {})
-      }).catch(() => {})
-    }
-    const unsubscribeSettingsChanged = onVoiceSettingsChanged(handler)
-
-    // 监听 IPC 停止录音通知（快捷键）
-    const cts = window.electronAPI.onVoiceDictationToggleStop(() => {
-      orch.stopRecording().catch(() => {})
-    })
-
-    return () => {
-      unsub()
-      unsubscribeStreaming?.()
-      unsubscribeSession?.()
-      unsubscribeMode?.()
-      unsubscribeSettingsChanged()
-      cts()
-      orch.destroy()
-    }
-  }, [store])
-
+  const { ui } = useVoiceOrchestrator()
   const { state, volume, transcript, message, settings } = ui
   const enabled = settings?.handsfreeEnabled ?? false
   const hasAudio = volume > 0.02

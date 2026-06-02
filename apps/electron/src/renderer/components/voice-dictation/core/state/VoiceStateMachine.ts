@@ -1,5 +1,5 @@
 /**
- * VoiceStateMachine - 语音识别状态机
+ * 【第 2 层 - 运行时层】VoiceStateMachine - 语音识别状态机
  *
  * 基于状态模式+策略模式的完整状态流转系统
  *

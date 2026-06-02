@@ -1,5 +1,5 @@
 /**
- * 语音模块 — Session 单次录音会话
+ * 【第 2 层 - 运行时层】Session 单次录音会话
  *
  * 生命周期：
  *   创建 → start() → ASR 转写中 → stop() / cancel() → dispose

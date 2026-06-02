@@ -1,14 +1,21 @@
 /**
- * 语音模块外观层（Facade）
+ * 【第 5 层 - 编排层】语音模块外观层（Facade）
  *
  * 说明：
  * - 该类不再承担业务编排，只负责把外部命令发布到统一事件总线
  * - 具体流程由各个发布者/订阅者模块消费事件完成
+ *
+ * 职责：
+ * - 创建所有业务模块实例
+ * - 发布命令到领域事件总线
+ * - 管理模块生命周期
+ * - 接收外部注入的 transportBus（ASR 对外交交互总线）
  */
 
 import type { VoiceDictationSettings } from '@/types/settings'
 import type { UIStateListener } from '../../types/panel'
 import type { VoiceLogEventListener, VoiceEventLogger } from '../../ui-events'
+import type { VoiceAsrTransportBus } from '../bus/VoiceAsrTransportBus'
 import {
   createVoiceEventLogger,
   emitVoiceAutoSendRequested,
@@ -46,42 +53,54 @@ export class Orchestrator {
   /** 统一领域事件总线 */
   private readonly bus = new VoiceDomainEventBus()
 
-  /** 领域模块 */
-  private readonly stateModule = new VoiceRuntimeStateModule(
-    this.bus,
-    createScopedLogger('📊 StateModule', this.logger),
-  )
+  /** 领域模块（在构造函数中初始化） */
+  private readonly stateModule: VoiceRuntimeStateModule
+  private readonly agentModule: VoiceAgentModule
+  private readonly captureModule: VoiceCaptureModule
+  private readonly decisionModule: VoiceDecisionModule
+  private readonly commandModule: VoiceCommandExecutionModule
+  private readonly actionModule: VoiceActionHandlerModule
 
-  private readonly agentModule = new VoiceAgentModule(
-    this.bus,
-    createScopedLogger('🤖 AgentModule', this.logger),
-  )
+  constructor(
+    /** ASR 对外交互总线（由外部 Hook 注入） */
+    private readonly transportBus: VoiceAsrTransportBus,
+  ) {
+    // 按依赖顺序初始化模块
+    this.stateModule = new VoiceRuntimeStateModule(
+      this.bus,
+      createScopedLogger('📊 StateModule', this.logger),
+    )
 
-  private readonly captureModule = new VoiceCaptureModule(
-    this.bus,
-    createScopedLogger('🎤 CaptureModule', this.logger),
-  )
+    this.agentModule = new VoiceAgentModule(
+      this.bus,
+      createScopedLogger('🤖 AgentModule', this.logger),
+    )
 
-  private readonly decisionModule = new VoiceDecisionModule(
-    this.bus,
-    this.agentModule,
-    createScopedLogger('🧠 DecisionModule', this.logger),
-  )
+    this.captureModule = new VoiceCaptureModule(
+      this.bus,
+      createScopedLogger('🎤 CaptureModule', this.logger),
+      this.transportBus,
+    )
 
-  private readonly commandModule = new VoiceCommandExecutionModule(
-    this.bus,
-    createScopedLogger('⚡ CommandModule', this.logger),
-  )
+    this.decisionModule = new VoiceDecisionModule(
+      this.bus,
+      this.agentModule,
+      createScopedLogger('🧠 DecisionModule', this.logger),
+    )
 
-  private readonly actionModule = new VoiceActionHandlerModule(
-    this.bus,
-    this.stateModule,
-    this.captureModule,
-    this.agentModule,
-    createScopedLogger('🎯 ActionModule', this.logger),
-  )
+    this.commandModule = new VoiceCommandExecutionModule(
+      this.bus,
+      createScopedLogger('⚡ CommandModule', this.logger),
+    )
 
-  constructor() {
+    this.actionModule = new VoiceActionHandlerModule(
+      this.bus,
+      this.stateModule,
+      this.captureModule,
+      this.agentModule,
+      createScopedLogger('🎯 ActionModule', this.logger),
+    )
+
     this.logger.info('🏗️ 初始化语音运行时')
 
     // === 🌉 桥接UI事件 ===
@@ -143,8 +162,9 @@ export class Orchestrator {
    */
   updateAgentState(state: AgentStateUpdatePayload): void {
     this.logger.debug('🤖 更新Agent状态', {
-      loopState: state.loopState,
-      canAcceptInput: state.canAcceptInput,
+      mode: state.mode,
+      status: state.status,
+      running: state.streamingState?.running,
     })
 
     this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.updateAgentState, state)

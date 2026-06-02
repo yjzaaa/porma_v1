@@ -1,5 +1,5 @@
 /**
- * 语音模块 — ASR Provider 工厂
+ * 【第 7 层 - ASR Provider 层】ASR Provider 工厂
  *
  * 根据配置的类型字符串创建对应的 ASR Provider 实例。
  * 默认（包括 'doubao' 和未知类型）走 DoubaoProvider（统一外部交互链路），

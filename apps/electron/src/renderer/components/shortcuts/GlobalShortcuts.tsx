@@ -230,8 +230,24 @@ export function GlobalShortcuts(): null {
   const store = useStore()
 
   const dispatchVoiceAutoSend = useCallback((rawText: string) => {
+    // eslint-disable-next-line no-console
+    console.log('[语音自动发送] dispatchVoiceAutoSend 入口', {
+      text: rawText.substring(0, 30),
+      autoSendEnabled: voiceDictationSettings?.autoSendEnabled,
+    })
     const trimmed = rawText.trim()
-    if (!shouldAutoSend(trimmed, voiceDictationSettings?.autoSendEnabled ?? true, 'always')) return
+    const autoSendEnabled = voiceDictationSettings?.autoSendEnabled ?? true
+    // eslint-disable-next-line no-console
+    console.log('[语音自动发送] shouldAutoSend 参数', {
+      text: trimmed.substring(0, 30),
+      enabled: autoSendEnabled,
+      textLength: trimmed.length,
+    })
+    if (!shouldAutoSend(trimmed, autoSendEnabled, 'always')) {
+      // eslint-disable-next-line no-console
+      console.warn('[语音自动发送] shouldAutoSend 返回 false')
+      return
+    }
     const appMode = store.get(appModeAtom)
 
     if (appMode === 'chat') {
@@ -243,12 +259,20 @@ export function GlobalShortcuts(): null {
       })
       return
     }
-    if (appMode !== 'agent') return
+    if (appMode !== 'agent') {
+      // eslint-disable-next-line no-console
+      console.warn('[语音自动发送] 非 agent 模式', { appMode })
+      return
+    }
 
     const channelId = store.get(agentChannelIdAtom)
     const sessionId = store.get(currentAgentSessionIdAtom)
     const workspaceId = store.get(currentAgentWorkspaceIdAtom)
-    if (!sessionId || !channelId) return
+    if (!sessionId || !channelId) {
+      // eslint-disable-next-line no-console
+      console.warn('[语音自动发送] 缺少 sessionId 或 channelId', { sessionId, channelId })
+      return
+    }
 
     store.set(agentSessionDraftsAtom, (prev: Map<string, string>) => {
       const map = new Map(prev)
@@ -292,14 +316,32 @@ export function GlobalShortcuts(): null {
       return map
     })
 
+    console.log('[语音自动发送] 准备发送消息', { sessionId, channelId, text: trimmed })
+    // 写入日志文件确认到达此处
+    const logData = {
+      timestamp: new Date().toISOString(),
+      sessionId,
+      channelId,
+      workspaceId,
+      text: trimmed.substring(0, 30),
+    }
+    // eslint-disable-next-line no-console
+    console.log('[语音自动发送] 准备调用 sendAgentMessage', logData)
+
     window.electronAPI.sendAgentMessage({
       sessionId,
       userMessage: trimmed,
       channelId,
       workspaceId: workspaceId ?? undefined,
-    }).catch((error) => {
-      console.error('[语音自动发送] 发送失败:', error)
     })
+      .then(() => {
+        // eslint-disable-next-line no-console
+        console.log('[语音自动发送] sendAgentMessage Promise resolved')
+      })
+      .catch((error) => {
+        // eslint-disable-next-line no-console
+        console.error('[语音自动发送] 发送失败:', error)
+      })
   }, [store, voiceDictationSettings])
 
   useEffect(() => {

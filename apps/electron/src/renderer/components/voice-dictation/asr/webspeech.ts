@@ -1,5 +1,5 @@
 /**
- * 语音模块 — Web Speech API ASR Provider
+ * 【第 7 层 - ASR Provider 层】Web Speech API ASR Provider
  *
  * 基于浏览器内置的 SpeechRecognition（webkitSpeechRecognition）的语音识别实现。
  *
