@@ -49,28 +49,28 @@ export class Orchestrator {
   /** 领域模块 */
   private readonly stateModule = new VoiceRuntimeStateModule(
     this.bus,
-    createScopedLogger('StateModule', this.logger),
+    createScopedLogger('📊 StateModule', this.logger),
   )
 
   private readonly agentModule = new VoiceAgentModule(
     this.bus,
-    createScopedLogger('AgentModule', this.logger),
+    createScopedLogger('🤖 AgentModule', this.logger),
   )
 
   private readonly captureModule = new VoiceCaptureModule(
     this.bus,
-    createScopedLogger('CaptureModule', this.logger),
+    createScopedLogger('🎤 CaptureModule', this.logger),
   )
 
   private readonly decisionModule = new VoiceDecisionModule(
     this.bus,
     this.agentModule,
-    createScopedLogger('DecisionModule', this.logger),
+    createScopedLogger('🧠 DecisionModule', this.logger),
   )
 
   private readonly commandModule = new VoiceCommandExecutionModule(
     this.bus,
-    createScopedLogger('CommandModule', this.logger),
+    createScopedLogger('⚡ CommandModule', this.logger),
   )
 
   private readonly actionModule = new VoiceActionHandlerModule(
@@ -78,15 +78,21 @@ export class Orchestrator {
     this.stateModule,
     this.captureModule,
     this.agentModule,
-    createScopedLogger('ActionModule', this.logger),
+    createScopedLogger('🎯 ActionModule', this.logger),
   )
 
   constructor() {
+    this.logger.info('🏗️ 初始化语音运行时')
+
+    // === 🌉 桥接UI事件 ===
     this.bridgeUnsubs.push(
       this.bus.on(VOICE_DOMAIN_EVENT_KEYS.ui.autoSendRequested, ({ text }) => {
+        this.logger.info('📤 收到自动发送请求', { text: this.formatText(text) })
         emitVoiceAutoSendRequested({ text })
       }),
     )
+
+    this.logger.info('✅ 语音运行时初始化完成')
   }
 
   /**
@@ -106,37 +112,65 @@ export class Orchestrator {
   }
 
   /**
-   * 发布「切换免提」命令
+   * 🎤 发布「切换免提」命令
+   *
+   * 用户点击免提按钮 → 触发音频采集启动
    */
   async toggleHandsfree(settings: VoiceDictationSettings): Promise<void> {
+    this.logger.info('🎤 发布切换免提命令', {
+      engine: settings.engine,
+      enabled: settings.enabled,
+    })
+
     this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, { settings })
   }
 
   /**
-   * 发布「停止录音」命令
+   * ⏹️ 发布「停止录音」命令
+   *
+   * 用户点击停止按钮 → 立即停止当前录音
    */
   async stopRecording(): Promise<void> {
+    this.logger.info('⏹️ 发布停止录音命令')
+
     this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.stopRecording, undefined)
   }
 
   /**
-   * 发布 Agent 状态更新命令
+   * 🤖 发布 Agent 状态更新命令
+   *
+   * Agent 状态变更 → 更新决策模块的上下文
    */
   updateAgentState(state: AgentStateUpdatePayload): void {
+    this.logger.debug('🤖 更新Agent状态', {
+      loopState: state.loopState,
+      canAcceptInput: state.canAcceptInput,
+    })
+
     this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.updateAgentState, state)
   }
 
   /**
-   * 发布最近消息追加命令
+   * 💬 发布最近消息追加命令
+   *
+   * Agent 收到新消息 → 更新去重判断的上下文
    */
   addRecentMessage(message: string): void {
+    this.logger.debug('💬 追加最近消息', {
+      message: this.formatText(message),
+    })
+
     this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.addRecentMessage, { message })
   }
 
   /**
-   * 发布 Agent 会话 ID 更新命令
+   * 🆔 发布 Agent 会话 ID 更新命令
+   *
+   * Agent 会话切换 → 重置上下文关联
    */
   setCurrentAgentSessionId(sessionId: string | null): void {
+    this.logger.debug('🆔 更新Agent会话ID', { sessionId })
+
     this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId, { sessionId })
   }
 
@@ -148,21 +182,58 @@ export class Orchestrator {
   }
 
   /**
-   * 销毁运行时
+   * 💥 销毁运行时
    *
-   * 顺序：先发布 destroy 命令，再释放各模块和总线。
+   * 流程：
+   *   📢 发布销毁命令
+   *   🎯 释放各层模块
+   *   🧹 清理事件总线
+   *   ✅ 完成清理
    */
   destroy(): void {
-    this.logger.info('销毁语音运行时')
+    this.logger.info('💥 开始销毁语音运行时')
+
+    // === 📢 第1步：发布销毁命令 ===
     this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.destroy, undefined)
+
+    // === 🎯 第2步：按逆序释放各层模块 ===
+    this.logger.info('🎯 释放动作处理模块')
     this.actionModule.dispose()
+
+    this.logger.info('🎯 释放命令执行模块')
     this.commandModule.dispose()
+
+    this.logger.info('🎯 释放决策模块')
     this.decisionModule.dispose()
+
+    this.logger.info('🎯 释放采集模块')
     this.captureModule.dispose()
+
+    this.logger.info('🎯 释放Agent模块')
     this.agentModule.dispose()
+
+    this.logger.info('🎯 释放状态模块')
     this.stateModule.dispose()
+
+    // === 🧹 第3步：清理桥接订阅 ===
     this.bridgeUnsubs.forEach((unsub) => unsub())
+
+    // === 🧹 第4步：清理事件总线 ===
     this.bus.clear()
+
+    // === 🧹 第5步：清理日志系统 ===
     this.eventLogger.dispose()
+
+    this.logger.info('✅ 语音运行时销毁完成')
+  }
+
+  /**
+   * 格式化文本用于日志显示
+   */
+  private formatText(text: string): string {
+    const maxLength = 20
+    return text.length > maxLength
+      ? `${text.substring(0, maxLength)}...`
+      : text
   }
 }

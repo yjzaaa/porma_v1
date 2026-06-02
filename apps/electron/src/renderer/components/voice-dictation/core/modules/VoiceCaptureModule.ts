@@ -49,18 +49,28 @@ export class VoiceCaptureModule extends BaseVoiceModule {
     logger: VoiceEventLogger,
   ) {
     super(bus, logger)
+
+    // === 订阅免提切换命令 ===
     this.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
       this.settings = settings
       if (settings.handsfreeEnabled && settings.enabled) {
+        this.logger.info('🎤 启用免提模式', { settings })
         this.enableHandsfree().catch(() => {})
         return
       }
+      this.logger.info('🔇 禁用免提模式')
       this.disableHandsfree()
     })
+
+    // === 订阅停止录音命令 ===
     this.on(VOICE_DOMAIN_EVENT_KEYS.command.stopRecording, () => {
+      this.logger.info('⏹️ 收到停止录音命令')
       this.stopRecording().catch(() => {})
     })
+
+    // === 订阅销毁命令 ===
     this.on(VOICE_DOMAIN_EVENT_KEYS.command.destroy, () => {
+      this.logger.info('💥 收到销毁命令')
       this.disableHandsfree()
     })
   }
@@ -109,42 +119,83 @@ export class VoiceCaptureModule extends BaseVoiceModule {
   /**
    * 开启免提链路：AudioHub + VAD 订阅
    *
-   * 成功后发布 `handsfree.enabled`，失败发布 `handsfree.failed`。
+   * 流程：
+   *   🎤 检查状态
+   *   🎚️ 启动音频采集
+   *   ✅ 成功后发布事件
+   *   🔄 订阅PCM帧流
    */
   private async enableHandsfree(): Promise<void> {
+    // === 🎤 第1步：检查当前状态 ===
     if (this.handsfreeEnabled) {
-      this.logger.debug('已经处于handsfree开启状态，跳过')
+      this.logger.debug('🔄 已经处于免提开启状态，跳过')
       return
     }
 
+    // === 🎚️ 第2步：重置VAD并启动音频采集 ===
+    this.logger.info('🎚️ 启动音频采集')
     this.vad.reset()
+
     try {
       await this.hub.start()
     } catch (error) {
-      this.logger.error('麦克风启动失败', { error })
-      this.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.failed, { message: '麦克风不可用', error })
+      // === ❌ 采集启动失败 ===
+      this.logger.error('❌ 麦克风启动失败', { error })
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.failed, {
+        message: '麦克风不可用',
+        error,
+      })
       return
     }
 
+    // === ✅ 第3步：发布成功事件 ===
     this.handsfreeEnabled = true
-    this.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, { settings: this.settings! })
+    this.logger.info('✅ 免提模式已启用')
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, {
+      settings: this.settings!,
+    })
 
+    // === 🔄 第4步：订阅PCM帧流 ===
     this.unsubVAD = this.hub.subscribe((frame: PcmFrame) => {
+      // 将音频帧推送到会话
       this.session?.pushAudio(frame)
+      // 进行VAD检测
       this.detectSpeech(frame)
     })
+
+    this.logger.info('📡 PCM帧流订阅已建立')
   }
 
   /**
    * 关闭免提链路并回收资源
+   *
+   * 流程：
+   *   🔇 关闭免提状态
+   *   ⏹️ 停止会话
+   *   📡 取消PCM订阅
+   *   🎚️ 停止音频采集
+   *   🔄 重置VAD
+   *   ✅ 发布关闭事件
    */
   private disableHandsfree(): void {
+    // === 🔇 第1步：关闭免提状态 ===
     this.handsfreeEnabled = false
+
+    // === ⏹️ 第2步：停止当前会话 ===
     this.cancelSession()
+
+    // === 📡 第3步：取消PCM帧流订阅 ===
     this.unsubVAD?.()
     this.unsubVAD = null
+
+    // === 🎚️ 第4步：停止音频采集 ===
     this.hub.stop()
+
+    // === 🔄 第5步：重置VAD ===
     this.vad.reset()
+
+    // === ✅ 第6步：发布关闭事件 ===
+    this.logger.info('✅ 免提模式已禁用')
     this.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled, undefined)
   }
 

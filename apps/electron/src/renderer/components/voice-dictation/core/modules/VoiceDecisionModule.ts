@@ -27,14 +27,20 @@ export class VoiceDecisionModule extends BaseVoiceModule {
     logger: VoiceEventLogger,
   ) {
     super(bus, logger)
-    this.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
-      this.currentEngine = settings.engine || 'doubao'
-    })
+
+    // === 订阅转写事件 ===
     this.on(VOICE_DOMAIN_EVENT_KEYS.session.transcript, ({ text, isFinal, provider }) => {
       this.handleTranscript(text, isFinal, provider)
     })
+
+    // === 订阅会话完成事件 ===
     this.on(VOICE_DOMAIN_EVENT_KEYS.session.complete, ({ text }) => {
       this.handleSessionComplete(text)
+    })
+
+    // === 订阅切换命令 ===
+    this.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
+      this.currentEngine = settings.engine || 'doubao'
     })
   }
 
@@ -49,60 +55,84 @@ export class VoiceDecisionModule extends BaseVoiceModule {
   /**
    * 处理转写事件并产出决策事件
    *
-   * 发布：
-   * - decision.feedback（用于 UI/状态反馈）
-   * - decision.execute（用于命令执行）
+   * 流程：
+   *   📥 接收转写结果
+   *   🔧 构建ASR结果
+   *   🔍 获取Agent状态
+   *   🧠 智能决策
+   *   📊 发布决策反馈
+   *   🚀 发布执行命令（如果决定发送）
    */
   private handleTranscript(text: string, isFinal: boolean | undefined, provider: ASRProvider): void {
-    this.logger.info('收到语音转写结果', {
-      text: `${text.substring(0, 20)}${text.length > 20 ? '...' : ''}`,
+    // === 📥 第1步：接收转写结果 ===
+    this.logger.info('📥 收到转写结果', {
+      text: this.formatText(text),
       isFinal,
     })
 
+    // === 🔧 第2步：构建ASR结果 ===
     const asrResult = this.buildASRResult(text, isFinal, provider)
+
+    // === 🔍 第3步：获取Agent状态 ===
     const agentContext = this.agentModule.getCurrentContext()
 
-    this.logger.debug('智能决策输入', {
+    this.logger.debug('🧠 决策输入', {
       asrType: asrResult.asrType,
       agentLoopState: agentContext.loopState,
       canAcceptInput: agentContext.canAcceptInput,
     })
 
+    // === 🧠 第4步：智能决策 ===
     const decision = this.detector.makeIntelligentDecision(asrResult, agentContext)
-    this.logger.info('智能决策结果', {
+
+    this.logger.info('🎯 决策结果', {
       shouldSend: decision.shouldSend,
       sendStrategy: decision.sendStrategy,
       confidence: decision.confidence.toFixed(2),
       reasoning: decision.reasoning,
     })
 
+    // === 📊 第5步：发布决策反馈 ===
     this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.feedback, {
       reasoning: decision.reasoning,
       strategy: decision.sendStrategy,
     })
 
-    if (!decision.shouldSend) return
-    if (this.shouldSkipDuplicate(text)) {
-      this.logger.info('跳过重复发送（转写事件）', { text: `${text.substring(0, 20)}${text.length > 20 ? '...' : ''}` })
-      return
+    // === 🚀 第6步：如果决定发送，发布执行命令 ===
+    if (decision.shouldSend) {
+      // 检查去重
+      if (this.shouldSkipDuplicate(text)) {
+        this.logger.info('⏭️ 跳过重复发送', {
+          text: this.formatText(text),
+        })
+        return
+      }
+
+      this.markSent(text)
+
+      // 发布执行命令
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text })
     }
-    this.markSent(text)
-    this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text })
   }
 
   /**
-   * 会话结束兜底决策：
-   * 豆包在某些场景下不会给出 definite=true，但 stop 后文本已经稳定，此处按 final 再判一次。
+   * 会话结束兜底决策
+   *
+   * 作用：豆包在某些场景下不会给出 definite=true，但 stop 后文本已经稳定
+   *       此处按 final 再判一次，确保不会丢失用户输入
    */
   private handleSessionComplete(text: string): void {
     const finalText = text.trim()
     if (!finalText) return
+
     if (this.shouldSkipDuplicate(finalText)) {
-      this.logger.info('跳过重复发送（会话完成兜底）', {
-        text: `${finalText.substring(0, 20)}${finalText.length > 20 ? '...' : ''}`,
+      this.logger.info('⏭️ 跳过重复发送（会话结束兜底）', {
+        text: this.formatText(finalText),
       })
       return
     }
+
+    this.logger.info('🔄 会话结束，触发兜底决策')
 
     const asrResult: UnifiedASRResult = {
       text: finalText,
@@ -112,16 +142,23 @@ export class VoiceDecisionModule extends BaseVoiceModule {
       asrType: this.currentEngine,
       metadata: {},
     }
+
     const agentContext = this.agentModule.getCurrentContext()
     const decision = this.detector.makeIntelligentDecision(asrResult, agentContext)
-    if (!decision.shouldSend) return
 
-    this.logger.info('会话完成触发兜底发送决策', {
-      strategy: decision.sendStrategy,
-      reasoning: decision.reasoning,
-    })
-    this.markSent(finalText)
-    this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text: finalText })
+    if (decision.shouldSend) {
+      this.logger.info('✅ 兜底决策通过', {
+        strategy: decision.sendStrategy,
+        reasoning: decision.reasoning,
+      })
+
+      this.markSent(finalText)
+
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, {
+        decision,
+        text: finalText,
+      })
+    }
   }
 
   /**
@@ -195,5 +232,15 @@ export class VoiceDecisionModule extends BaseVoiceModule {
   private markSent(text: string): void {
     this.lastSentText = text
     this.lastSentAt = Date.now()
+  }
+
+  /**
+   * 格式化文本用于日志显示
+   */
+  private formatText(text: string): string {
+    const maxLength = 20
+    return text.length > maxLength
+      ? `${text.substring(0, maxLength)}...`
+      : text
   }
 }
