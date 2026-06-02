@@ -9,12 +9,11 @@ import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
 import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 import { UnifiedIntelligenceDetector } from '../intelligence/UnifiedIntelligenceDetector'
 import { VoiceAgentModule } from './VoiceAgentModule'
+import { BaseVoiceModule } from './BaseVoiceModule'
 
-export class VoiceDecisionModule {
+export class VoiceDecisionModule extends BaseVoiceModule {
   /** 智能检测器（语音完整性 + 发送策略） */
   private readonly detector = new UnifiedIntelligenceDetector()
-  /** 事件退订列表 */
-  private readonly unsubs: Array<() => void> = []
   /** 当前 ASR 引擎类型（用于构建统一结果） */
   private currentEngine: 'doubao' | 'webspeech' = 'doubao'
   /** 最近一次已发送文本（用于去重） */
@@ -23,28 +22,27 @@ export class VoiceDecisionModule {
   private lastSentAt = 0
 
   constructor(
-    private readonly bus: VoiceDomainEventBus,
+    bus: VoiceDomainEventBus,
     private readonly agentModule: VoiceAgentModule,
-    private readonly logger: VoiceEventLogger,
+    logger: VoiceEventLogger,
   ) {
-    this.unsubs.push(
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
-        this.currentEngine = settings.engine || 'doubao'
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.transcript, ({ text, isFinal, provider }) => {
-        this.handleTranscript(text, isFinal, provider)
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.complete, ({ text }) => {
-        this.handleSessionComplete(text)
-      }),
-    )
+    super(bus, logger)
+    this.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
+      this.currentEngine = settings.engine || 'doubao'
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.session.transcript, ({ text, isFinal, provider }) => {
+      this.handleTranscript(text, isFinal, provider)
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.session.complete, ({ text }) => {
+      this.handleSessionComplete(text)
+    })
   }
 
   /**
    * 释放决策模块资源
    */
   dispose(): void {
-    this.unsubs.forEach((unsub) => unsub())
+    this.disposeSubscriptions()
     this.detector.dispose()
   }
 
@@ -78,7 +76,7 @@ export class VoiceDecisionModule {
       reasoning: decision.reasoning,
     })
 
-    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.decision.feedback, {
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.feedback, {
       reasoning: decision.reasoning,
       strategy: decision.sendStrategy,
     })
@@ -89,7 +87,7 @@ export class VoiceDecisionModule {
       return
     }
     this.markSent(text)
-    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text })
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text })
   }
 
   /**
@@ -123,7 +121,7 @@ export class VoiceDecisionModule {
       reasoning: decision.reasoning,
     })
     this.markSent(finalText)
-    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text: finalText })
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text: finalText })
   }
 
   /**

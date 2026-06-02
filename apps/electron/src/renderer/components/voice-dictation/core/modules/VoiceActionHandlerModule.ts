@@ -2,13 +2,14 @@
  * 动作处理模块（动作事件 -> 具体执行）
  */
 
-import { emitVoiceAutoSendRequested, type VoiceEventLogger } from '../../ui-events'
+import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
 import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 import { VoiceState } from '../state/VoiceStateMachine'
 import { VoiceAgentModule } from './VoiceAgentModule'
 import { VoiceCaptureModule } from './VoiceCaptureModule'
 import { VoiceRuntimeStateModule } from './VoiceRuntimeStateModule'
+import { BaseVoiceModule } from './BaseVoiceModule'
 
 interface ImmediateActionConfig {
   reason: string
@@ -16,28 +17,25 @@ interface ImmediateActionConfig {
   completedMessage: string
 }
 
-export class VoiceActionHandlerModule {
-  private readonly unsubs: Array<() => void> = []
-
+export class VoiceActionHandlerModule extends BaseVoiceModule {
   constructor(
-    private readonly bus: VoiceDomainEventBus,
+    bus: VoiceDomainEventBus,
     private readonly stateModule: VoiceRuntimeStateModule,
     private readonly captureModule: VoiceCaptureModule,
     private readonly agentModule: VoiceAgentModule,
-    private readonly logger: VoiceEventLogger,
+    logger: VoiceEventLogger,
   ) {
-    this.unsubs.push(
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText, ({ text, reasoning }) =>
-        this.handleSendVoiceText(text, reasoning),
-      ),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.action.handleImmediateInstruction, ({ command, reasoning }) =>
-        this.handleImmediateInstruction(command, reasoning),
-      ),
+    super(bus, logger)
+    this.on(VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText, ({ text, reasoning }) =>
+      this.handleSendVoiceText(text, reasoning),
+    )
+    this.on(VOICE_DOMAIN_EVENT_KEYS.action.handleImmediateInstruction, ({ command, reasoning }) =>
+      this.handleImmediateInstruction(command, reasoning),
     )
   }
 
   dispose(): void {
-    this.unsubs.forEach((unsub) => unsub())
+    this.disposeSubscriptions()
   }
 
   private handleSendVoiceText(text: string, reasoning: string): void {
@@ -53,7 +51,7 @@ export class VoiceActionHandlerModule {
     )
 
     try {
-      emitVoiceAutoSendRequested({ text })
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.ui.autoSendRequested, { text })
       this.logger.info('语音已成功发送到Agent', { textLength: text.length, reasoning })
 
       this.stateModule.setTranscriptAndMessage('', '已发送')

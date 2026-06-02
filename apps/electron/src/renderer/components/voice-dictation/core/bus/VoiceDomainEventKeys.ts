@@ -25,6 +25,7 @@ export const VOICE_DECISION_EXECUTE_EVENT = 'decision.execute' as const
 
 export const VOICE_ACTION_SEND_VOICE_TEXT_EVENT = 'action.send_voice_text' as const
 export const VOICE_ACTION_HANDLE_IMMEDIATE_INSTRUCTION_EVENT = 'action.handle_immediate_instruction' as const
+export const VOICE_UI_AUTO_SEND_REQUESTED_EVENT = 'ui.auto_send_requested' as const
 
 export const VOICE_DOMAIN_EVENT_KEYS = {
   command: {
@@ -55,5 +56,8 @@ export const VOICE_DOMAIN_EVENT_KEYS = {
   action: {
     sendVoiceText: VOICE_ACTION_SEND_VOICE_TEXT_EVENT,
     handleImmediateInstruction: VOICE_ACTION_HANDLE_IMMEDIATE_INSTRUCTION_EVENT,
+  },
+  ui: {
+    autoSendRequested: VOICE_UI_AUTO_SEND_REQUESTED_EVENT,
   },
 } as const

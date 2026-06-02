@@ -11,14 +11,13 @@ import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 import { VoiceState, VoiceStateMachine } from '../state/VoiceStateMachine'
 import { StateTransitionQueue } from '../state/StateTransitionQueue'
 import type { StateTransitionContext } from '../state/VoiceStateMachine'
+import { BaseVoiceModule } from './BaseVoiceModule'
 
-export class VoiceRuntimeStateModule {
+export class VoiceRuntimeStateModule extends BaseVoiceModule {
   /** 语音状态机（唯一 UI 状态投影来源） */
   private readonly stateMachine = new VoiceStateMachine()
   /** 转换队列（保证状态迁移时序） */
   private readonly transitionQueue = new StateTransitionQueue(this.stateMachine)
-  /** 事件退订列表 */
-  private readonly unsubs: Array<() => void> = []
   /** 错误恢复计时器 */
   private recoverTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -34,58 +33,57 @@ export class VoiceRuntimeStateModule {
   private volume = 0
 
   constructor(
-    private readonly bus: VoiceDomainEventBus,
-    private readonly logger: VoiceEventLogger,
+    bus: VoiceDomainEventBus,
+    logger: VoiceEventLogger,
   ) {
-    this.unsubs.push(
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
-        this.settings = settings
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId, ({ sessionId }) => {
-        this.currentAgentSessionId = sessionId
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, ({ settings }) => {
-        this.settings = settings
-        this.stateMachine.transition(VoiceState.LISTENING, this.createTransitionContext('开启免提模式'))
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled, () => {
-        this.stateMachine.transition(VoiceState.STOPPED, this.createTransitionContext('关闭免提模式'))
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.failed, ({ message }) => {
-        this.stateMachine.transition(
-          VoiceState.STOPPED,
-          this.createTransitionContext('麦克风不可用', { message }),
-        )
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.started, () => {
-        this.transcript = ''
-        this.message = '正在监听...'
-        this.stateMachine.transition(
-          VoiceState.RECORDING,
-          this.createTransitionContext('启动录音会话', {
-            transcript: '',
-            message: '正在监听...',
-          }),
-        )
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.volume, ({ peak }) => {
-        this.volume = peak
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.transcript, ({ text }) => {
-        this.transcript = text
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.metadata, ({ message }) => {
-        this.message = message
-        this.stateMachine.transition(
-          this.stateMachine.getCurrentState(),
-          this.createTransitionContext('元数据更新', { message }),
-        )
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.complete, ({ text, commitMessage }) => this.handleSessionComplete(text, commitMessage)),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.error, ({ message }) => this.handleSessionError(message)),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.decision.feedback, ({ reasoning, strategy }) =>
-        this.applyDecisionFeedback(reasoning, strategy),
-      ),
+    super(bus, logger)
+    this.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
+      this.settings = settings
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId, ({ sessionId }) => {
+      this.currentAgentSessionId = sessionId
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, ({ settings }) => {
+      this.settings = settings
+      this.stateMachine.transition(VoiceState.LISTENING, this.createTransitionContext('开启免提模式'))
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled, () => {
+      this.stateMachine.transition(VoiceState.STOPPED, this.createTransitionContext('关闭免提模式'))
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.failed, ({ message }) => {
+      this.stateMachine.transition(
+        VoiceState.STOPPED,
+        this.createTransitionContext('麦克风不可用', { message }),
+      )
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.session.started, () => {
+      this.transcript = ''
+      this.message = '正在监听...'
+      this.stateMachine.transition(
+        VoiceState.RECORDING,
+        this.createTransitionContext('启动录音会话', {
+          transcript: '',
+          message: '正在监听...',
+        }),
+      )
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.session.volume, ({ peak }) => {
+      this.volume = peak
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.session.transcript, ({ text }) => {
+      this.transcript = text
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.session.metadata, ({ message }) => {
+      this.message = message
+      this.stateMachine.transition(
+        this.stateMachine.getCurrentState(),
+        this.createTransitionContext('元数据更新', { message }),
+      )
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.session.complete, ({ text, commitMessage }) => this.handleSessionComplete(text, commitMessage))
+    this.on(VOICE_DOMAIN_EVENT_KEYS.session.error, ({ message }) => this.handleSessionError(message))
+    this.on(VOICE_DOMAIN_EVENT_KEYS.decision.feedback, ({ reasoning, strategy }) =>
+      this.applyDecisionFeedback(reasoning, strategy),
     )
   }
 
@@ -156,7 +154,7 @@ export class VoiceRuntimeStateModule {
    * 释放状态模块资源
    */
   dispose(): void {
-    this.unsubs.forEach((unsub) => unsub())
+    this.disposeSubscriptions()
     this.transitionQueue.dispose()
     this.stateMachine.dispose()
     if (this.recoverTimer) {

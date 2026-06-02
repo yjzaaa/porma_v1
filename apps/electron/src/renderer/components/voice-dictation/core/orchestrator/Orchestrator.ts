@@ -11,6 +11,7 @@ import type { UIStateListener } from '../../types/panel'
 import type { VoiceLogEventListener, VoiceEventLogger } from '../../ui-events'
 import {
   createVoiceEventLogger,
+  emitVoiceAutoSendRequested,
   VoiceLogEventEmitter,
   VoiceLogEventSubscriber,
 } from '../../ui-events'
@@ -34,6 +35,8 @@ function createScopedLogger(prefix: string, logger: VoiceEventLogger): VoiceEven
 }
 
 export class Orchestrator {
+  /** 桥接订阅（领域总线 -> UI 事件） */
+  private readonly bridgeUnsubs: Array<() => void> = []
   /** 统一日志事件发射器 */
   private readonly eventEmitter = new VoiceLogEventEmitter()
   /** 日志写入订阅器 */
@@ -77,6 +80,14 @@ export class Orchestrator {
     this.agentModule,
     createScopedLogger('ActionModule', this.logger),
   )
+
+  constructor() {
+    this.bridgeUnsubs.push(
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.ui.autoSendRequested, ({ text }) => {
+        emitVoiceAutoSendRequested({ text })
+      }),
+    )
+  }
 
   /**
    * 订阅 UI 状态快照
@@ -150,6 +161,7 @@ export class Orchestrator {
     this.captureModule.dispose()
     this.agentModule.dispose()
     this.stateModule.dispose()
+    this.bridgeUnsubs.forEach((unsub) => unsub())
     this.bus.clear()
     this.eventLogger.dispose()
   }

@@ -21,14 +21,13 @@ import {
   SESSION_EVENT_VOLUME,
 } from '../bus/SessionEventKeys'
 import { VoiceAsrTransportModule } from './VoiceAsrTransportModule'
+import { BaseVoiceModule } from './BaseVoiceModule'
 
-export class VoiceCaptureModule {
+export class VoiceCaptureModule extends BaseVoiceModule {
   /** 统一麦克风采集中心 */
   private readonly hub = new AudioHub()
   /** 语音活动检测器 */
   private readonly vad = new VADDetector()
-  /** 事件退订列表 */
-  private readonly unsubs: Array<() => void> = []
   /** 会话完成等待器 */
   private readonly completionWaiters = new Map<Session, { resolve: () => void }>()
 
@@ -46,25 +45,24 @@ export class VoiceCaptureModule {
   private readonly transportModule = new VoiceAsrTransportModule(this.transportBus)
 
   constructor(
-    private readonly bus: VoiceDomainEventBus,
-    private readonly logger: VoiceEventLogger,
+    bus: VoiceDomainEventBus,
+    logger: VoiceEventLogger,
   ) {
-    this.unsubs.push(
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
-        this.settings = settings
-        if (settings.handsfreeEnabled && settings.enabled) {
-          this.enableHandsfree().catch(() => {})
-          return
-        }
-        this.disableHandsfree()
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.stopRecording, () => {
-        this.stopRecording().catch(() => {})
-      }),
-      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.destroy, () => {
-        this.disableHandsfree()
-      }),
-    )
+    super(bus, logger)
+    this.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
+      this.settings = settings
+      if (settings.handsfreeEnabled && settings.enabled) {
+        this.enableHandsfree().catch(() => {})
+        return
+      }
+      this.disableHandsfree()
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.command.stopRecording, () => {
+      this.stopRecording().catch(() => {})
+    })
+    this.on(VOICE_DOMAIN_EVENT_KEYS.command.destroy, () => {
+      this.disableHandsfree()
+    })
   }
 
   /**
@@ -102,7 +100,7 @@ export class VoiceCaptureModule {
    * 释放采集模块资源
    */
   dispose(): void {
-    this.unsubs.forEach((unsub) => unsub())
+    this.disposeSubscriptions()
     this.disableHandsfree()
     this.completionWaiters.clear()
     this.transportModule.dispose()
@@ -124,12 +122,12 @@ export class VoiceCaptureModule {
       await this.hub.start()
     } catch (error) {
       this.logger.error('麦克风启动失败', { error })
-      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.failed, { message: '麦克风不可用', error })
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.failed, { message: '麦克风不可用', error })
       return
     }
 
     this.handsfreeEnabled = true
-    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, { settings: this.settings! })
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, { settings: this.settings! })
 
     this.unsubVAD = this.hub.subscribe((frame: PcmFrame) => {
       this.session?.pushAudio(frame)
@@ -147,7 +145,7 @@ export class VoiceCaptureModule {
     this.unsubVAD = null
     this.hub.stop()
     this.vad.reset()
-    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled, undefined)
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled, undefined)
   }
 
   /**
@@ -190,10 +188,10 @@ export class VoiceCaptureModule {
     this.bindSessionEvents(session, provider)
 
     this.session = session
-    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.started, { engine: this.settings.engine || 'doubao' })
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.session.started, { engine: this.settings.engine || 'doubao' })
     session.start().catch((error) => {
       this.logger.error('启动ASR失败', { error })
-      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message: 'ASR 引擎启动失败' })
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message: 'ASR 引擎启动失败' })
     })
   }
 
@@ -201,11 +199,11 @@ export class VoiceCaptureModule {
    * Session 事件桥接到领域总线
    */
   private bindSessionEvents(session: Session, provider: ASRProvider): void {
-    session.events.on(SESSION_EVENT_VOLUME, (peak) => this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.volume, { peak }))
+    session.events.on(SESSION_EVENT_VOLUME, (peak) => this.emit(VOICE_DOMAIN_EVENT_KEYS.session.volume, { peak }))
     session.events.on(SESSION_EVENT_TRANSCRIPT, ({ text, isFinal }) =>
-      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.transcript, { text, isFinal, provider }),
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.session.transcript, { text, isFinal, provider }),
     )
-    session.events.on(SESSION_EVENT_METADATA, (message) => this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.metadata, { message }))
+    session.events.on(SESSION_EVENT_METADATA, (message) => this.emit(VOICE_DOMAIN_EVENT_KEYS.session.metadata, { message }))
     session.events.on(SESSION_EVENT_COMPLETE, ({ text }) => {
       void this.handleSessionComplete(session, text)
     })
@@ -216,7 +214,7 @@ export class VoiceCaptureModule {
         return
       }
       this.session = null
-      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message })
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message })
       this.resolveSessionCompletion(session)
     })
   }
@@ -250,7 +248,7 @@ export class VoiceCaptureModule {
         this.logger.error('提交语音文本失败', {
           error: error instanceof Error ? error.message : '未知错误',
         })
-        this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message: '输出失败' })
+        this.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message: '输出失败' })
         this.session = null
         this.resolveSessionCompletion(session)
         return
@@ -258,7 +256,7 @@ export class VoiceCaptureModule {
     }
 
     this.session = null
-    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.complete, {
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.session.complete, {
       text: trimmed,
       commitMessage,
     })

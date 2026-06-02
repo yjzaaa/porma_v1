@@ -8,6 +8,7 @@ import type { IntelligentDecision } from '../../types/intelligence'
 import {
   VOICE_ACTION_HANDLE_IMMEDIATE_INSTRUCTION_EVENT,
   VOICE_ACTION_SEND_VOICE_TEXT_EVENT,
+  VOICE_UI_AUTO_SEND_REQUESTED_EVENT,
   VOICE_COMMAND_ADD_RECENT_MESSAGE_EVENT,
   VOICE_COMMAND_DESTROY_EVENT,
   VOICE_COMMAND_SET_AGENT_SESSION_ID_EVENT,
@@ -95,6 +96,8 @@ export interface VoiceDomainEventMap {
   [VOICE_ACTION_SEND_VOICE_TEXT_EVENT]: { text: string; reasoning: string }
   /** 处理即时指令 */
   [VOICE_ACTION_HANDLE_IMMEDIATE_INSTRUCTION_EVENT]: { command: string; reasoning: string }
+  /** UI 自动发送请求（桥接到 window 事件） */
+  [VOICE_UI_AUTO_SEND_REQUESTED_EVENT]: { text: string }
 }
 
 export type VoiceDomainEventType = keyof VoiceDomainEventMap
@@ -132,6 +135,7 @@ export class VoiceDomainEventBus {
 
       [VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.action.handleImmediateInstruction]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.ui.autoSendRequested]: new Set(),
     }
 
   /**
