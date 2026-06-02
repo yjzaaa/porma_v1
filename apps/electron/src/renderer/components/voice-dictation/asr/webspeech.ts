@@ -18,7 +18,12 @@
  */
 
 import type { ASRProvider, ASRCallbacks } from '../types/asr'
-import { createLogger } from '../utils/logger'
+import {
+  createVoiceEventLogger,
+  VoiceLogEventEmitter,
+  VoiceLogEventSubscriber,
+  type VoiceLogEventListener,
+} from '../events'
 
 /** Web Speech API 类型 shim（TS 内置类型中未完整包含） */
 interface SpeechRecognition_ {
@@ -39,8 +44,12 @@ const SpeechCtor = ((window as any).SpeechRecognition ?? (window as any).webkitS
   (new () => SpeechRecognition_) | undefined
 
 export class WebSpeechProvider implements ASRProvider {
-  /** 日志工具 */
-  private logger = createLogger('WebSpeech')
+  /** 日志事件发射器 */
+  private readonly eventEmitter = new VoiceLogEventEmitter()
+  /** 统一日志适配器（事件驱动） */
+  private readonly logger = createVoiceEventLogger(this.eventEmitter)
+  /** 日志订阅器 */
+  private readonly eventLogger = new VoiceLogEventSubscriber('WebSpeech', this.eventEmitter)
   /** 当前 Recognition 实例 */
   private recognition: SpeechRecognition_ | null = null
   /** 外部回调引用 */
@@ -51,6 +60,10 @@ export class WebSpeechProvider implements ASRProvider {
   private disposed = false
   /** 是否为用户主动停止（用于 onend 时区分正常结束和用户打断） */
   private userStopped = false
+
+  onEvent(listener: VoiceLogEventListener): () => void {
+    return this.eventEmitter.onEvent(listener)
+  }
 
   /**
    * 启动 Web Speech 语音识别
@@ -151,6 +164,7 @@ export class WebSpeechProvider implements ASRProvider {
     this.disposed = true
     try { this.recognition?.abort() } catch {}
     this.recognition = null; this.callbacks = null
+    this.eventLogger.dispose()
   }
 
   /**

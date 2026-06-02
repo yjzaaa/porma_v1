@@ -9,10 +9,9 @@
  * 4. 监听菜单 IPC 事件（Cmd+W 关闭标签）
  */
 
-import React, { useEffect, useCallback, useRef } from 'react'
-import { unstable_batchedUpdates } from 'react-dom'
+import React, { useEffect, useCallback } from 'react'
+import type { SDKMessage, FileAttachment } from '@proma/shared'
 import type { VoiceDictationSettings } from '../../../types'
-import type { SDKMessage } from '@proma/shared'
 import { useAtomValue, useSetAtom, useAtom, useStore } from 'jotai'
 import { appModeAtom } from '@/atoms/app-mode'
 import { settingsOpenAtom, channelFormDirtyAtom, settingsCloseRequestedAtom } from '@/atoms/settings-tab'
@@ -31,13 +30,12 @@ import {
   agentSessionDraftsAtom,
   agentSessionsAtom,
   currentAgentSessionIdAtom,
+  agentStreamingStatesAtom,
+  liveMessagesMapAtom,
   agentChannelIdAtom,
   currentAgentWorkspaceIdAtom,
   agentWorkspacesAtom,
   agentAttachedFilesMapAtom,
-  liveMessagesMapAtom,
-  agentMessageRefreshAtom,
-  agentStreamingStatesAtom,
 } from '@/atoms/agent-atoms'
 import type { AgentStreamState } from '@/atoms/agent-atoms'
 import {
@@ -56,73 +54,8 @@ import {
   updateShortcutOverrides,
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
+import { onVoiceAutoSendRequested, onVoiceSettingsChanged } from '@/components/voice-dictation/events'
 import { shouldAutoSend } from '@/components/voice-dictation/utils/auto-send'
-
-/** 语音自动发送：判断文本完整性后直接发送到 Agent，成功后清除草稿 */
-function tryAutoSendAgent(
-  store: ReturnType<typeof import('jotai').useStore>,
-  text: string,
-  voiceSettings: VoiceDictationSettings | null
-) {
-  // 使用新的签名，传递语音设置
-  if (!shouldAutoSend(text, voiceSettings?.autoSendEnabled ?? true, 'always')) return
-  const channelId = store.get(agentChannelIdAtom)
-  const sessionId = store.get(currentAgentSessionIdAtom)
-  const workspaceId = store.get(currentAgentWorkspaceIdAtom)
-  if (!sessionId || !channelId) return
-
-  // 先清除草稿，给用户即时反馈
-  store.set(agentSessionDraftsAtom, (prev) => {
-    const map = new Map(prev)
-    map.delete(sessionId)
-    return map
-  })
-  store.set(agentSessionDraftHtmlAtom, (prev) => {
-    const map = new Map(prev)
-    map.delete(sessionId)
-    return map
-  })
-
-  // 设置流式状态（与 useAgentSend 正常发送流程一致）
-  const streamStartedAt = Date.now()
-  store.set(agentStreamingStatesAtom, (prev: Map<string, AgentStreamState>) => {
-    const map = new Map(prev)
-    const existing = prev.get(sessionId)
-    map.set(sessionId, {
-      running: true,
-      content: '',
-      toolActivities: [],
-      model: undefined,
-      startedAt: streamStartedAt,
-      inputTokens: existing?.inputTokens,
-      contextWindow: existing?.contextWindow,
-    })
-    return map
-  })
-
-  // 乐观插入用户消息，让聊天区立即显示
-  store.set(liveMessagesMapAtom, (prev: Map<string, SDKMessage[]>) => {
-    const map = new Map(prev)
-    const existing = map.get(sessionId) ?? []
-    map.set(sessionId, [...existing, {
-      type: 'user',
-      message: { content: [{ type: 'text', text }] },
-      parent_tool_use_id: null,
-      _createdAt: streamStartedAt,
-    } as unknown as SDKMessage])
-    return map
-  })
-
-  // 立即发送消息
-  window.electronAPI.sendAgentMessage({
-    sessionId,
-    userMessage: text,
-    channelId,
-    workspaceId: workspaceId ?? undefined,
-  }).catch((error) => {
-    console.error('[语音自动发送] 发送失败:', error)
-  })
-}
 
 /**
  * 快捷键初始化 + 全局 Handler 注册
@@ -184,8 +117,8 @@ export function GlobalShortcuts(): null {
         }))
       }).catch(console.error)
     }
-    window.addEventListener('proma:voice-settings-changed', handler)
-    return () => window.removeEventListener('proma:voice-settings-changed', handler)
+    const unsubscribeSettingsChanged = onVoiceSettingsChanged(handler)
+    return () => unsubscribeSettingsChanged()
   }, [setHandsfreeState])
 
   // 配置变更时同步到注册表
@@ -296,6 +229,68 @@ export function GlobalShortcuts(): null {
 
   const store = useStore()
 
+  const dispatchVoiceAutoSend = useCallback((rawText: string) => {
+    const trimmed = rawText.trim()
+    if (!shouldAutoSend(trimmed, voiceDictationSettings?.autoSendEnabled ?? true, 'always')) return
+    if (store.get(appModeAtom) !== 'agent') return
+
+    const channelId = store.get(agentChannelIdAtom)
+    const sessionId = store.get(currentAgentSessionIdAtom)
+    const workspaceId = store.get(currentAgentWorkspaceIdAtom)
+    if (!sessionId || !channelId) return
+
+    store.set(agentSessionDraftsAtom, (prev: Map<string, string>) => {
+      const map = new Map(prev)
+      map.delete(sessionId)
+      return map
+    })
+    store.set(agentSessionDraftHtmlAtom, (prev: Map<string, string>) => {
+      const map = new Map(prev)
+      map.delete(sessionId)
+      return map
+    })
+
+    const startedAt = Date.now()
+    store.set(agentStreamingStatesAtom, (prev: Map<string, AgentStreamState>) => {
+      const map = new Map(prev)
+      const existing = prev.get(sessionId)
+      map.set(sessionId, {
+        running: true,
+        content: '',
+        toolActivities: [],
+        model: undefined,
+        startedAt,
+        inputTokens: existing?.inputTokens,
+        contextWindow: existing?.contextWindow,
+      })
+      return map
+    })
+
+    store.set(liveMessagesMapAtom, (prev: Map<string, SDKMessage[]>) => {
+      const map = new Map(prev)
+      const existing = map.get(sessionId) ?? []
+      map.set(sessionId, [
+        ...existing,
+        {
+          type: 'user',
+          message: { content: [{ type: 'text', text: trimmed }] },
+          parent_tool_use_id: null,
+          _createdAt: startedAt,
+        } as unknown as SDKMessage,
+      ])
+      return map
+    })
+
+    window.electronAPI.sendAgentMessage({
+      sessionId,
+      userMessage: trimmed,
+      channelId,
+      workspaceId: workspaceId ?? undefined,
+    }).catch((error) => {
+      console.error('[语音自动发送] 发送失败:', error)
+    })
+  }, [store, voiceDictationSettings])
+
   useEffect(() => {
     const cleanup = window.electronAPI.onQuickTaskOpenSession(async (data) => {
       try {
@@ -393,7 +388,7 @@ export function GlobalShortcuts(): null {
           store.set(currentConversationIdAtom, meta.id)
 
           // 处理附件：保存到磁盘，收集 FileAttachment[]
-          const savedAttachments: import('@proma/shared').FileAttachment[] = []
+          const savedAttachments: FileAttachment[] = []
           if (data.files && data.files.length > 0) {
             for (const file of data.files) {
               if (!file.base64) {
@@ -441,6 +436,13 @@ export function GlobalShortcuts(): null {
   // ===== 语音输入 → 写入当前 Proma 输入框 =====
 
   useEffect(() => {
+    const unsubscribe = onVoiceAutoSendRequested(({ text }) => {
+      dispatchVoiceAutoSend(text)
+    })
+    return unsubscribe
+  }, [dispatchVoiceAutoSend])
+
+  useEffect(() => {
     const cleanup = window.electronAPI.onVoiceDictationInsertText(({ text }) => {
       const trimmed = text.trim()
       if (!trimmed) return
@@ -454,7 +456,7 @@ export function GlobalShortcuts(): null {
         // 语音自动发送（光标路径）：文本已插入编辑器，直接调 sendAgentMessage
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            tryAutoSendAgent(store, trimmed, voiceDictationSettings)
+            dispatchVoiceAutoSend(trimmed)
           })
         })
         return
@@ -509,38 +511,7 @@ export function GlobalShortcuts(): null {
               return map
             })
 
-            // 先发送消息（异步）
-            const channelId = store.get(agentChannelIdAtom)
-            const workspaceId = store.get(currentAgentWorkspaceIdAtom)
-            const voiceSettings = voiceDictationSettings
-
-            if (!shouldAutoSend(trimmed, voiceSettings?.autoSendEnabled ?? true, 'always')) {
-              return
-            }
-
-            if (!channelId) {
-              console.warn('[语音自动发送] 没有可用的渠道')
-              return
-            }
-
-            // 发送消息并等待完成
-            window.electronAPI.sendAgentMessage({
-              sessionId,
-              userMessage: trimmed,
-              channelId,
-              workspaceId: workspaceId ?? undefined,
-            })
-              .then(() => {
-                // 消息发送成功后，立即触发刷新
-                store.set(agentMessageRefreshAtom, (prev) => {
-                  const map = new Map(prev)
-                  map.set(sessionId, (prev.get(sessionId) ?? 0) + 1)
-                  return map
-                })
-              })
-              .catch((error) => {
-                console.error('[语音自动发送] 发送失败:', error)
-              })
+            dispatchVoiceAutoSend(trimmed)
           })
         })
         return
@@ -560,7 +531,7 @@ export function GlobalShortcuts(): null {
       }
     })
     return cleanup
-  }, [store])
+  }, [dispatchVoiceAutoSend, store])
 
   // ===== 语音浮窗显示状态广播监听 =====
   useEffect(() => {

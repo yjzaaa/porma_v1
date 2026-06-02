@@ -16,6 +16,7 @@ import {
   SettingsToggle,
 } from './primitives'
 import type { VoiceDictationSettings, MicPermissionResult } from '../../../types'
+import { emitVoiceSettingsChanged } from '@/components/voice-dictation/events'
 
 const ENDPOINT_OPTIONS = [
   { value: 'async', label: '双向流式优化版' },
@@ -111,7 +112,7 @@ export function VoiceInputSettings(): React.ReactElement {
       const saved = await window.electronAPI.updateVoiceDictationSettings(optimistic)
       setSettings(saved)
       window.electronAPI.reregisterGlobalShortcuts().catch(console.error)
-      window.dispatchEvent(new CustomEvent('proma:voice-settings-changed'))
+      emitVoiceSettingsChanged()
     } catch (error) {
       console.error('[语音输入] 保存设置失败:', error)
       toast.error('保存语音输入设置失败')

@@ -17,18 +17,18 @@
  *   - vad: VADDetector 实例 → 由 Orchestrator 持有，Session 读取 isSpeaking
  *   - provider: ASRProvider 实例 → 由 Orchestrator 通过 createASRProvider 创建
  *   - settings: VoiceDictationSettings → 当前语音配置
- *   - callbacks: SessionCallbacks → Orchestrator 回调
+ *   - events: SessionEventBus → Orchestrator 订阅 Session 事件
  *
  * @see ./VADDetector.ts - 自适应 VAD 算法
- * @see ../types/panel.ts - PcmSubscriber / SessionCallbacks / SessionResult 定义
+ * @see ../types/panel.ts - PcmSubscriber / SessionResult 定义
  * @see ../types/asr.ts - ASRProvider 接口
  */
 
-import type { PcmFrame, PcmSubscriber } from '../types/panel'
-import type { SessionCallbacks, SessionResult } from '../types/panel'
-import type { ASRProvider } from '../types/asr'
-import type { VoiceDictationSettings } from '../../../../types'
+import type { PcmFrame, PcmSubscriber } from '../../types/panel'
+import type { ASRProvider } from '../../types/asr'
+import type { VoiceDictationSettings } from '../../../../../types'
 import type { VADDetector } from './VADDetector'
+import { SessionEventBus } from './SessionEventBus'
 
 export class Session {
   /** ASR Provider 引用 */
@@ -47,13 +47,14 @@ export class Session {
   private _disposed = false
   /** 是否已完成（防止 completeRecording 被多次调用） */
   private _completed = false
+  /** 事件总线（事件驱动） */
+  readonly events = new SessionEventBus()
 
   constructor(
     private subscribe: (sub: PcmSubscriber) => () => void,
     private vad: VADDetector,
     provider: ASRProvider,
     private settings: VoiceDictationSettings,
-    private callbacks: SessionCallbacks,
   ) {
     this.provider = provider
   }
@@ -79,7 +80,7 @@ export class Session {
     // 订阅 PCM 帧 → 实时音量 + VAD 静音检测
     this.subs.push(this.subscribe((frame: PcmFrame) => {
       if (this._disposed) return
-      this.callbacks.onVolume(frame.peak)
+      this.events.emit('volume', frame.peak)
 
       const now = performance.now()
       // isSpeaking 由 VADDetector 基于自适应阈值判断（含挂尾保护）
@@ -106,22 +107,22 @@ export class Session {
         onTranscript: (text: string) => {
           if (this._disposed) return
           this.transcript = text
-          this.callbacks.onTranscript(text)
+          this.events.emit('transcript', { text })
         },
         onState: (_s: string, msg?: string) => {
-          if (msg) this.callbacks.onMetadata(msg)
+          if (msg) this.events.emit('metadata', msg)
         },
-        onVolume: (p: number) => this.callbacks.onVolume(p),
+        onVolume: (p: number) => this.events.emit('volume', p),
         onEnd: (text: string) => {
           // Provider 端主动结束时（如 WebSpeech 自动断连）直接完成
           if (text && !this._disposed) this.completeRecording()
         },
         onError: (msg: string) => {
-          if (!this._disposed) this.callbacks.onError(msg)
+          if (!this._disposed) this.events.emit('error', msg)
         },
       })
     } catch {
-      if (!this._disposed) this.callbacks.onError('ASR 引擎启动失败')
+      if (!this._disposed) this.events.emit('error', 'ASR 引擎启动失败')
     }
   }
 
@@ -144,7 +145,7 @@ export class Session {
   }
 
   /**
-   * 完成录音：提交转写文本到主进程并通知回调
+   * 完成录音：提交转写文本到主进程并发布完成事件
    *
    * 防护：_disposed 和 _completed 双重守卫，确保只执行一次。
    * 空文本时直接返回空结果，不触发 commit IPC。
@@ -154,17 +155,17 @@ export class Session {
     this._completed = true
     const text = this.transcript.trim()
     if (!text) {
-      this.callbacks.onComplete({ text: '', commitMessage: '' })
+      this.events.emit('complete', { text: '', commitMessage: '' })
       return
     }
 
     // 通过 IPC 将转写文本输出到当前活跃的输入框
     window.electronAPI.commitVoiceDictation({ text }).then(r => {
       this.commitMessage = r.message
-      this.callbacks.onComplete({ text, commitMessage: r.message })
+      this.events.emit('complete', { text, commitMessage: r.message })
     }).catch(err => {
       console.error('[Session] commit 失败:', err)
-      this.callbacks.onError('输出失败')
+      this.events.emit('error', '输出失败')
     })
   }
 
@@ -188,5 +189,6 @@ export class Session {
     this.provider?.dispose(); this.provider = null
     for (const unsub of this.subs) unsub()
     this.subs = []
+    this.events.clear()
   }
 }

@@ -1,6 +1,11 @@
-import type { AgentContext } from '../types/intelligence'
-import { AgentLoopState } from '../types/intelligence'
-import { createLogger } from '../utils/logger'
+import type { AgentContext } from '../../types/intelligence'
+import { AgentLoopState } from '../../types/intelligence'
+import {
+  createVoiceEventLogger,
+  VoiceLogEventEmitter,
+  VoiceLogEventSubscriber,
+  type VoiceLogEventListener,
+} from '../../events'
 
 /**
  * Agent状态监听器
@@ -12,7 +17,9 @@ import { createLogger } from '../utils/logger'
  *   4. 提供Agent上下文信息
  */
 export class AgentStateMonitor {
-  private logger = createLogger('Agent状态监听器')
+  private readonly eventEmitter = new VoiceLogEventEmitter()
+  private readonly logger = createVoiceEventLogger(this.eventEmitter)
+  private readonly eventLogger = new VoiceLogEventSubscriber('Agent状态监听器', this.eventEmitter)
   
   private currentState: {
     mode: 'agent' | 'chat'
@@ -38,6 +45,10 @@ export class AgentStateMonitor {
     this.logger.info('Agent状态监听器初始化完成')
   }
 
+  onEvent(listener: VoiceLogEventListener): () => void {
+    return this.eventEmitter.onEvent(listener)
+  }
+
   /**
    * 获取Agent当前上下文
    */
@@ -52,7 +63,7 @@ export class AgentStateMonitor {
       lastUserMessageTime: this.currentState.lastUserMessageTime
     }
     
-    this.logger.debug('获取Agent上下文', { 
+    this.logger.debug('获取Agent上下文', {
       loopState: context.loopState,
       canAcceptInput: context.canAcceptInput,
       activeTools: context.activeToolCalls.length 
@@ -67,7 +78,7 @@ export class AgentStateMonitor {
   private detectLoopState(): AgentLoopState {
     const { hasError, streamingState, status } = this.currentState
     
-    this.logger.debug('开始Agent循环状态检测', { 
+    this.logger.debug('开始Agent循环状态检测', {
       hasError, 
       streamingRunning: streamingState.running,
       status 
@@ -84,7 +95,7 @@ export class AgentStateMonitor {
       // 有工具活动 → 工具执行中
       if (streamingState.toolActivities.length > 0) {
         const toolState = this.analyzeToolContext(streamingState.toolActivities)
-        this.logger.debug('工具执行状态分析', { 
+        this.logger.debug('工具执行状态分析', {
           tools: streamingState.toolActivities,
           toolState 
         })
@@ -114,7 +125,7 @@ export class AgentStateMonitor {
     const criticalTools = ['file_write', 'database_write', 'system_modify']
     const interruptibleTools = ['web_search', 'data_read', 'calculation']
     
-    const activeTool = toolActivities.length > 0 ? toolActivities[toolActivities.length - 1] : 'unknown'
+    const activeTool = toolActivities.at(-1) ?? 'unknown'
     
     this.logger.debug('分析工具上下文', { activeTool, toolCount: toolActivities.length })
     
@@ -151,7 +162,7 @@ export class AgentStateMonitor {
   canAcceptInput(intent?: string): boolean {
     const loopState = this.detectLoopState()
     
-    this.logger.debug('判断是否接受用户输入', { 
+    this.logger.debug('判断是否接受用户输入', {
       loopState, 
       intent 
     })
@@ -210,7 +221,7 @@ export class AgentStateMonitor {
       this.currentState.streamingState = state.streamingState
       
       if (oldRunning !== state.streamingState.running) {
-        this.logger.info('流式状态变化', { 
+        this.logger.info('流式状态变化', {
           old: oldRunning, 
           new: state.streamingState.running,
           toolCount: state.streamingState.toolActivities.length 
@@ -247,7 +258,7 @@ export class AgentStateMonitor {
       this.currentState.recentMessages = this.currentState.recentMessages.slice(-5)
     }
     
-    this.logger.debug('添加最近消息', { 
+    this.logger.debug('添加最近消息', {
       message: message.substring(0, 20) + '...',
       totalMessages: this.currentState.recentMessages.length 
     })
@@ -274,5 +285,6 @@ export class AgentStateMonitor {
   dispose(): void {
     this.logger.info('销毁Agent状态监听器')
     this.reset()
+    this.eventLogger.dispose()
   }
 }

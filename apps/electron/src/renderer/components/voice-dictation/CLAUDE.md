@@ -1,224 +1,150 @@
 # 语音模块 — Voice Dictation
 
-基于状态机的语音听写模块，支持免提模式和 VAD（语音活动检测）。
+当前语音模块已从“单体 Orchestrator 编排”演进为“**事件总线 + 模块发布/订阅**”架构。  
+`core/orchestrator/Orchestrator.ts` 仅作为 Facade，对外保持 API，不再承载业务流程。
 
-## 架构图
+## 架构图（模块关系）
 
 ```mermaid
 flowchart TB
-    subgraph types["types/ — 类型定义层"]
-        asr_t["asr.ts — ASRProvider 接口 + ASRCallbacks"]
-        panel_t["panel.ts — 状态机类型 / PCM 帧 / Session / UIState"]
-        idx_t["index.ts — 类型重导出"]
+    subgraph ui["UI 层"]
+        panel["ui/VoiceFloatingPanel.tsx<br/>订阅 UIState，发布外部命令"]
     end
 
-    subgraph asr["asr/ — ASR Provider 实现层"]
-        factory["factory.ts — 工厂模式创建 Provider"]
-        webspeech["webspeech.ts — Web Speech API<br/>浏览器内置识别"]
-        doubao["doubao.ts — 豆包 ASR<br/>IPC 通信 + 主进程链路"]
+    subgraph facade["Facade 层"]
+        orch["core/orchestrator/Orchestrator.ts<br/>外观层：装配模块 + 发布 command.*"]
     end
 
-    subgraph core["core/ — 核心逻辑层"]
-        sm["StateMachine.ts — 6 状态 FSM<br/>合法转换守卫"]
-        hub["AudioHub.ts — 麦克风 PCM 采集<br/>单例 + 3 秒环形缓冲"]
-        vad_d["VADDetector.ts — 自适应语音检测<br/>噪声估计 + 挂尾保护"]
-        session["Session.ts — 单轮录音会话<br/>VAD 静音检测（依赖注入）"]
-        orch["Orchestrator.ts — 总调度器<br/>免提开关 / VAD / Session 管理"]
+    subgraph domain["领域模块（发布/订阅）"]
+        bus["core/bus/VoiceDomainEventBus.ts<br/>统一事件总线（typed events）"]
+        capture["core/modules/VoiceCaptureModule.ts<br/>采集 + VAD + Session 生命周期"]
+        decision["core/modules/VoiceDecisionModule.ts<br/>转写智能决策"]
+        command["core/modules/VoiceCommandExecutionModule.ts<br/>动作分发（decision.* -> action.*）"]
+        action["core/modules/VoiceActionHandlerModule.ts<br/>动作处理（订阅 action.* 执行副作用）"]
+        state["core/modules/VoiceRuntimeStateModule.ts<br/>状态投影（唯一写入口）"]
+        agent["core/modules/VoiceAgentModule.ts<br/>Agent 上下文桥接"]
     end
 
-    subgraph ui["ui/ — 表示层"]
-        panel["VoiceFloatingPanel.tsx<br/>React Portal 浮动面板"]
+    subgraph runtime["运行时能力"]
+        audio["core/runtime/AudioHub.ts"]
+        vad["core/runtime/VADDetector.ts"]
+        session["core/runtime/Session.ts"]
+        fsm["core/state/VoiceStateMachine.ts"]
+        queue["core/state/StateTransitionQueue.ts"]
+        asr["asr/factory.ts + asr/*Provider.ts"]
     end
 
-    subgraph utils["utils/ — 工具函数"]
-        auto["auto-send.ts — 自动发送策略"]
-        pcm["pcm.ts — PCM 采样率转换 / 分片"]
-    end
+    panel --> orch
+    orch --> bus
 
-    %% 依赖关系
-    core --> types
-    asr --> types
-    asr --> utils
-    orch --> sm
-    orch --> hub
-    orch --> session
-    orch --> asr
-    ui --> orch
-    ui --> types
-    ui --> utils
+    bus <--> capture
+    bus <--> decision
+    bus <--> command
+    bus <--> action
+    bus <--> state
+    bus <--> agent
 
-    %% 外部依赖
-    hub -->|"getUserMedia"| Browser["浏览器 Media API"]
-    doubao -->|"IPC"| MainProcess["Electron 主进程"]
-    webspeech -->|"SpeechRecognition"| Browser
+    capture --> audio
+    capture --> vad
+    capture --> session
+    capture --> asr
+
+    state --> fsm
+    state --> queue
 ```
 
-## 数据流向图
+## 数据流向图（事件驱动）
 
 ```mermaid
 flowchart LR
-    mic["🎤 麦克风"] -->|"getUserMedia<br/>Float32"| hub["AudioHub<br/>ScriptProcessor → PCM 帧"]
-    hub -->|"PCM 帧广播<br/>subscribers"| session["Session<br/>VAD 检测 + ASR 推送"]
-    hub -->|"PCM 帧"| vad["Orchestrator.detectSpeech<br/>免提语音活动检测"]
-    
-    session -->|"onTranscript"| orch["Orchestrator<br/>UIState 聚合"]
-    vad -->|"能量阈值触发"| orch
-    orch -->|"broadcast"| ui["VoiceFloatingPanel<br/>React setState"]
-    
-    session -->|"stop/complete"| commit["commitVoiceDictation IPC<br/>主进程输出处理"]
-    commit -->|"result.message"| orch
-    orch -->|"onAutoSend"| send["window.electronAPI<br/>sendAgentMessage"]
+    U["VoiceFloatingPanel"] -->|"toggleHandsfree / stopRecording / updateAgentState"| F["Orchestrator Facade"]
+    F -->|"emit command.*"| B["VoiceDomainEventBus"]
+
+    B -->|"command.toggle_handsfree"| C["VoiceCaptureModule"]
+    C -->|"handsfree.enabled / handsfree.disabled"| B
+
+    C -->|"session.started / session.volume / session.transcript / session.complete / session.error"| B
+    B -->|"session.transcript"| D["VoiceDecisionModule"]
+    D -->|"decision.feedback / decision.execute"| B
+
+    B -->|"decision.execute"| X["VoiceCommandExecutionModule"]
+    X -->|"action.*"| H["VoiceActionHandlerModule"]
+    H -->|"emitVoiceAutoSendRequested"| GS["GlobalShortcuts"]
+    GS -->|"sendAgentMessage"| Agent["Agent Runtime"]
+
+    B -->|"session.* + decision.feedback + handsfree.*"| S["VoiceRuntimeStateModule"]
+    S -->|"VoiceUIState"| U
+
+    B -->|"command.update_agent_state / command.set_agent_session_id"| A["VoiceAgentModule"]
+    A -->|"AgentContext（供决策模块读取）"| D
 ```
 
-## 状态机图
-
-```mermaid
-stateDiagram-v2
-    [*] --> stopped
-    stopped --> listening: enableHandsfree
-    listening --> recording: VAD 检测到语音
-    listening --> stopped: disableHandsfree
-    
-    recording --> processing: 静音超时 / 手动停止
-    recording --> error: ASR 失败
-    recording --> stopped: 取消
-    recording --> recording: 持续录音中
-    
-    processing --> completed: 输出成功
-    processing --> error: 输出失败
-    processing --> stopped: 取消
-    
-    completed --> stopped: 2s 后自动回归
-    completed --> listening: 免提模式 2s 后
-    
-    error --> stopped: 2s 后自动恢复
-    error --> listening: 免提模式 2s 后
-```
-
-## 关键时序图
-
-### 免提模式自动录音
+## 关键时序图（免提到自动发送）
 
 ```mermaid
 sequenceDiagram
-    participant User as 用户
     participant UI as VoiceFloatingPanel
-    participant Orch as Orchestrator
-    participant Hub as AudioHub
-    participant FSM as StateMachine
-    participant Sess as Session
-    participant ASR as ASR Provider
-    
-    Note over UI,ASR: 免提模式：连续免按键操作
-    
-    UI->>Orch: enableHandsfree()
-    Orch->>FSM: transition('listening')
-    Orch->>Hub: start() — getUserMedia
-    Hub-->>Orch: PCM 帧订阅
-    
-    loop VAD 检测
-        Hub->>Orch: PCM 帧 (volume)
-        Orch->>Orch: detectSpeech() — 能量阈值判断
-        alt 检测到语音 (>0.02, >2s 间隔)
-            Orch->>FSM: transition('recording')
-            Orch->>Sess: new Session() → start()
-            Sess->>ASR: start() — 启动识别
-        end
-    end
-    
+    participant F as Orchestrator(Facade)
+    participant B as VoiceDomainEventBus
+    participant C as VoiceCaptureModule
+    participant D as VoiceDecisionModule
+    participant X as VoiceCommandExecutionModule
+    participant H as VoiceActionHandlerModule
+    participant S as VoiceRuntimeStateModule
+
+    UI->>F: toggleHandsfree(settings)
+    F->>B: command.toggle_handsfree
+    B->>C: consume command.toggle_handsfree
+    C->>B: handsfree.enabled
+    B->>S: consume handsfree.enabled -> transition(listening)
+
+    C->>B: session.started
+    B->>S: transition(recording)
+
     loop 录音中
-        Hub->>Sess: PCM 帧订阅
-        Sess->>Sess: VAD 静音检测
-        alt 静音超时 (>= vatStopTimeoutMs)
-            Sess->>Sess: stop()
-        end
-        Sess->>ASR: PCM 数据（豆包）/ 事件（WebSpeech）
-        ASR-->>Sess: onTranscript(text, isFinal)
-        Sess-->>Orch: onTranscript
-        Orch-->>UI: emit(UIState)
+      C->>B: session.transcript(text,isFinal,provider)
+      B->>D: consume session.transcript
+      D->>B: decision.feedback
+      B->>S: 更新 message / 状态投影
+      alt shouldSend
+        D->>B: decision.execute
+        B->>X: consume decision.execute
+        X->>B: emit action.*
+        B->>H: consume action.*
+      end
     end
-    
-    Sess->>Sess: completeRecording()
-    Sess->>+MainProcess: commitVoiceDictation(text)
-    MainProcess-->>-Sess: {message}
-    Sess-->>Orch: onComplete({text, commitMessage})
-    Orch->>FSM: transition('stopped')
-    Orch->>UI: emit()
-    Note over Orch: 2s 后自动回 listening
-    Orch->>FSM: transition('listening')
-    Orch->>UI: emit()
+
+    C->>B: session.complete
+    B->>S: transition(stopped/listening)
 ```
 
-### 手动录音模式
-
-```mermaid
-sequenceDiagram
-    participant User as 用户
-    participant UI as VoiceFloatingPanel
-    participant Orch as Orchestrator
-    participant FSM as StateMachine
-    participant Sess as Session
-    participant ASR as ASR Provider
-    
-    Note over User,ASR: 手动模式：用户按键触发录音/停止
-    
-    User->>UI: 快捷键 / 按钮 push-to-talk
-    UI->>Orch: stopRecording()
-    Orch->>FSM: transition('processing')
-    Orch->>Sess: session.stop()
-    Sess->>ASR: stop() → 返回最终文本
-    Sess->>Sess: completeRecording()
-    Sess-->>Orch: onComplete({text, commitMessage})
-    Orch->>UI: emit(UIState)
-```
-
-## 文件职责导航
+## 重要文件导航（按职责）
 
 | 文件 | 职责 |
-|------|------|
-| `types/asr.ts` | ASR Provider 接口定义（ASRProvider / ASRCallbacks / ASRProviderType） |
-| `types/panel.ts` | 面板状态机类型（PanelState / DetectorState / VoiceUIState）、PCM 帧、Session/UI 通信接口 |
-| `types/index.ts` | 类型重导出入口 |
-| `core/StateMachine.ts` | 6 状态有限状态机，严格守卫合法转换 |
-| `core/AudioHub.ts` | 麦克风 PCM 采集单例，3 秒环形缓冲，发布-订阅模式 |
-| `core/VADDetector.ts` | 自适应 VAD：噪声底噪 EMA 估计、连续帧确认、挂尾保护 |
-| `core/Session.ts` | 单轮录音会话生命周期管理（start→stop→complete→dispose），通过 VADDetector.isSpeaking 做静音检测 |
-| `core/Orchestrator.ts` | 总调度器：AudioHub 持有、免提开关、VADDetector 管理、Session 创建/销毁、UIState 广播、ASR Provider 创建 |
-| `asr/factory.ts` | ASR Provider 工厂函数 |
-| `asr/webspeech.ts` | Web Speech API 实现，浏览器内置语音识别（零 IPC） |
-| `asr/doubao.ts` | 豆包 ASR 实现，通过 IPC 与主进程通信 |
-| `ui/VoiceFloatingPanel.tsx` | React Portal 浮动面板 UI，纯状态观察者 |
-| `utils/auto-send.ts` | 语音识别文本自动发送判断（always / smart / AI 三种策略） |
-| `utils/pcm.ts` | PCM 音频工具函数：采样率转换、缓冲合并、分片 |
+|---|---|
+| `core/orchestrator/Orchestrator.ts` | Facade：对外 API、模块装配、生命周期管理 |
+| `core/bus/VoiceDomainEventBus.ts` | 统一领域事件契约与发布/订阅实现 |
+| `core/modules/VoiceCaptureModule.ts` | 采集/VAD/Session 链路，发布 `session.*` |
+| `core/modules/VoiceDecisionModule.ts` | 消费 `session.transcript`，发布 `decision.*` |
+| `core/modules/VoiceCommandExecutionModule.ts` | 消费 `decision.execute`，发布 `action.*` |
+| `core/modules/VoiceActionHandlerModule.ts` | 消费 `action.*`，执行发送/打断/状态迁移 |
+| `core/modules/VoiceRuntimeStateModule.ts` | 状态机投影（唯一状态写入口） |
+| `core/modules/VoiceAgentModule.ts` | Agent 状态桥接，提供 `AgentContext` |
+| `core/runtime/AudioHub.ts` | 麦克风 PCM 采集与帧广播 |
+| `core/runtime/VADDetector.ts` | 自适应语音活动检测 |
+| `core/runtime/Session.ts` | 单轮录音会话生命周期 |
+| `core/state/VoiceStateMachine.ts` | 语音状态机 |
+| `core/state/StateTransitionQueue.ts` | 状态迁移排队执行 |
+| `asr/factory.ts` | ASR Provider 工厂 |
+| `asr/doubao.ts` | 豆包 ASR Provider |
+| `asr/webspeech.ts` | WebSpeech Provider |
+| `events/voice-dictation-events.ts` | UI 侧全局事件（设置变更、自动发送请求） |
+| `events/log-events.ts` | 日志事件发射/订阅工具 |
 
-## 依赖关系图（修复后）
+## 当前设计原则
 
-```
-types/  ←  asr/  ←  core/Orchestrator  →  utils/
-          ↑              │
-          │              ├→ core/AudioHub      (只依赖 types)
-          │              ├→ core/StateMachine   (只依赖 types)
-          │              ├→ core/Session        (依赖 types + 注入的 subscribe/provider)
-          │              └→ asr/factory → {DoubaoProvider, WebSpeechProvider}
-          │
-          └— core/Orchestrator 是唯一的"知情人"，负责组装所有依赖
-
-Session 不再 import:
-  ✗ import type { AudioHub }           ← 同级横向依赖
-  ✗ import { createASRProvider }       ← 向下游直接调用
-  ✗ import 来自 utils/pcm              ← 未使用代码
-
-Session 的依赖全部来自 types/ + 构造函数注入:
-  ✓ type PcmSubscriber — 由 subscribe 函数类型携带
-  ✓ type ASRProvider   — 由 provider 参数携带
-  ✓ VoiceDictationSettings, SessionCallbacks
-```
-
-## 核心设计原则
-
-1. **单次录音单 Session** — 每轮录音创建一个独立的 Session 实例，不跨轮泄漏状态
-2. **AudioHub 单例** — 整个应用只有一个 `getUserMedia` 调用，VAD 和 Session 通过 `subscribe()` 接收 PCM 帧
-3. **FSM 严格守卫** — 每个状态转换都经过 `VALID_TRANSITIONS` 表校验，拒绝非法跳转
-4. **Orchestrator 中控** — 所有状态的变更和 UI 广播都经过 Orchestrator，React 层只做纯渲染
-5. **依赖倒置** — Session 不依赖具体实现（AudioHub / VADDetector / ASR Provider），通过构造函数注入 `subscribe` 函数、`VADDetector` 和 `ASRProvider` 接口。Orchestrator 负责组装所有依赖，`core/` 内部不产生同级横向依赖
-6. **静音检测与自动重连** — 免提模式下 VAD 检测到语音自动启动录音，完成后 2 秒自动回归 listening 状态
+1. **Facade 最小化**：Facade 只发布命令，不直接执行业务分支。  
+2. **总线协作**：模块间不互相调用实现，统一经 `VoiceDomainEventBus` 协作。  
+3. **状态单写口**：状态写入只在 `VoiceRuntimeStateModule`，降低竞态。  
+4. **动作事件收口**：发送/打断等副作用统一由 `action.*` 事件链处理。  
+5. **运行时与策略分层**：采集链路（Capture）与决策链路（Decision）解耦。  

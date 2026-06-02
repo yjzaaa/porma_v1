@@ -16,20 +16,29 @@
  *
  * @see ../utils/pcm.ts - PCM 工具函数
  * @see ../types/asr.ts - ASRProvider 接口定义
- * @see ../core/AudioHub.ts - 环形缓冲（用于免提回取）
+ * @see ../core/runtime/AudioHub.ts - 环形缓冲（用于免提回取）
  */
 
 import type { ASRProvider, ASRCallbacks } from '../types/asr'
 import type { VoiceDictationSettings, VoiceDictationStateEvent, VoiceDictationTranscriptEvent } from '../../../../types'
 import { CHUNK_BYTES, concatAudioBuffers, floatTo16BitPcm, splitChunk } from '../utils/pcm'
-import { createLogger } from '../utils/logger'
+import {
+  createVoiceEventLogger,
+  VoiceLogEventEmitter,
+  VoiceLogEventSubscriber,
+  type VoiceLogEventListener,
+} from '../events'
 
 /** AudioContext 引用（兼容 WebKit 前缀） */
 const ACTX = (window as any).AudioContext ?? (window as any).webkitAudioContext as typeof AudioContext | undefined
 
 export class DoubaoProvider implements ASRProvider {
-  /** 日志工具 */
-  private logger = createLogger('豆包ASR')
+  /** 日志事件发射器 */
+  private readonly eventEmitter = new VoiceLogEventEmitter()
+  /** 统一日志适配器（事件驱动） */
+  private readonly logger = createVoiceEventLogger(this.eventEmitter)
+  /** 日志订阅器 */
+  private readonly eventLogger = new VoiceLogEventSubscriber('豆包ASR', this.eventEmitter)
   /** 当前 ASR 会话 ID（用于 IPC 消息隔离） */
   private sessionId: string | null = null
   /** 主进程 ASR 是否就绪（startVoiceDictation 成功返回后为 true） */
@@ -60,6 +69,10 @@ export class DoubaoProvider implements ASRProvider {
   private stopTimeout: ReturnType<typeof setTimeout> | null = null
   /** IPC 监听器清理函数 */
   private cleanupListeners: (() => void) | null = null
+
+  onEvent(listener: VoiceLogEventListener): () => void {
+    return this.eventEmitter.onEvent(listener)
+  }
 
   /**
    * 启动豆包 ASR 会话
@@ -103,7 +116,7 @@ export class DoubaoProvider implements ASRProvider {
       if (e.metadata?.utterances) {
         this.currentUtterances = e.metadata.utterances
         this.currentDefinite = e.metadata.utterances.some((u: any) => u.definite === true)
-        this.logger.debug('豆包ASR utterances更新', { 
+        this.logger.debug('豆包ASR utterances更新', {
           utterances: e.metadata.utterances,
           definite: this.currentDefinite 
         })
@@ -268,5 +281,6 @@ export class DoubaoProvider implements ASRProvider {
     this.callbacks = null
     this.currentDefinite = undefined
     this.currentUtterances = undefined
+    this.eventLogger.dispose()
   }
 }

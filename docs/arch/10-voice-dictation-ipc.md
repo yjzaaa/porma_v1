@@ -170,27 +170,26 @@ sequenceDiagram
 
 ## 关键代码解析
 
-### 1. Orchestrator 音频编排与 VAD
+### 1. VoiceRuntime 事件编排（发布/订阅）
 
-**文件位置**: `apps/electron/src/renderer/components/voice-dictation/core/Orchestrator.ts:62-83`
+**文件位置**:
+- `apps/electron/src/renderer/components/voice-dictation/core/orchestrator/Orchestrator.ts`
+- `apps/electron/src/renderer/components/voice-dictation/core/bus/VoiceDomainEventBus.ts`
+- `apps/electron/src/renderer/components/voice-dictation/core/modules/*`
 
 ```typescript
-async enableHandsfree(): Promise<void> {
-  if (!this.fsm.transition('listening')) return
-  try { await this.hub.start() } catch { ... }
-
-  this.unsubVAD = this.hub.subscribe((frame: PcmFrame) => {
-    this.volume = frame.peak
-    this.emit()
-    this.detectSpeech(frame)
-  })
+// Facade 只发布命令，不直接编排业务
+async toggleHandsfree(settings: VoiceDictationSettings): Promise<void> {
+  this.bus.emit('command.toggle_handsfree', { settings })
 }
 ```
 
-VoicedDictationApp 旧版单体中的音频采集 + VAD 内联逻辑，已被重构为独立的 OO 架构：
-- **AudioHub**: 麦克风单例，PCM 帧广播给所有订阅者
-- **StateMachine**: 严格守卫状态转换，阻止竞态
-- **Session**: 每次录音独立的生命周期管理
+当前实现已从上帝类切换到事件驱动模块化：
+- **VoiceCaptureModule**：采集 + VAD + Session 生命周期（发布 `session.*`）
+- **VoiceDecisionModule**：转写智能决策（发布 `decision.*`）
+- **VoiceCommandExecutionModule**：消费决策并执行命令
+- **VoiceRuntimeStateModule**：状态机与 UI 投影（唯一状态写入口）
+- **VoiceAgentModule**：Agent 上下文监控与会话桥接
 
 ### 2. 文本输出的智能路由
 
@@ -232,22 +231,13 @@ export async function commitVoiceDictationText(
 **文件位置**: `apps/electron/src/renderer/components/voice-dictation/ui/VoiceFloatingPanel.tsx:30-48`
 
 ```typescript
-orch.onAutoSend = (text: string) => {
-  if (store.get(appModeAtom) !== 'agent') return
-  const channelId = store.get(agentChannelIdAtom)
-  const sessionId = store.get(currentAgentSessionIdAtom)
-  if (!sessionId || !channelId) return
-
-  // 清除草稿、设置流式状态、乐观插入用户消息
-  store.set(agentSessionDraftsAtom, (prev) => { ... })
-  store.set(agentStreamingStatesAtom, (prev) => { ... })
-  store.set(liveMessagesMapAtom, (prev) => { ... })
-
-  window.electronAPI.sendAgentMessage({ sessionId, userMessage: text, channelId, ... })
-}
+// 命令执行模块发布自动发送事件
+emitVoiceAutoSendRequested({ text })
 ```
 
-自动发送回调在 `VoiceFloatingPanel` 中注册到 `Orchestrator.onAutoSend`，GlobalShortcuts 仅负责辅助路径（外部写入光标）的自动发送。
+自动发送已改为统一事件通道（`VOICE_AUTO_SEND_REQUESTED_EVENT`）：
+- Voice 模块只负责发布自动发送请求事件
+- GlobalShortcuts 统一消费该事件并执行 Agent 发送流程
 
 ## 数据流向
 

@@ -1,0 +1,138 @@
+/**
+ * 智能决策模块（ASR 结果 -> 决策事件）
+ */
+
+import type { ASRProvider } from '../../types/asr'
+import type { UnifiedASRResult } from '../../types/intelligence'
+import type { VoiceEventLogger } from '../../events'
+import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
+import { UnifiedIntelligenceDetector } from '../intelligence/UnifiedIntelligenceDetector'
+import { VoiceAgentModule } from './VoiceAgentModule'
+
+export class VoiceDecisionModule {
+  /** 智能检测器（语音完整性 + 发送策略） */
+  private readonly detector = new UnifiedIntelligenceDetector()
+  /** 事件退订列表 */
+  private readonly unsubs: Array<() => void> = []
+  /** 当前 ASR 引擎类型（用于构建统一结果） */
+  private currentEngine: 'doubao' | 'webspeech' = 'doubao'
+
+  constructor(
+    private readonly bus: VoiceDomainEventBus,
+    private readonly agentModule: VoiceAgentModule,
+    private readonly logger: VoiceEventLogger,
+  ) {
+    this.unsubs.push(
+      this.bus.on('command.toggle_handsfree', ({ settings }) => {
+        this.currentEngine = settings.engine || 'doubao'
+      }),
+      this.bus.on('session.transcript', ({ text, isFinal, provider }) => {
+        this.handleTranscript(text, isFinal, provider)
+      }),
+    )
+  }
+
+  /**
+   * 释放决策模块资源
+   */
+  dispose(): void {
+    this.unsubs.forEach((unsub) => unsub())
+    this.detector.dispose()
+  }
+
+  /**
+   * 处理转写事件并产出决策事件
+   *
+   * 发布：
+   * - decision.feedback（用于 UI/状态反馈）
+   * - decision.execute（用于命令执行）
+   */
+  private handleTranscript(text: string, isFinal: boolean | undefined, provider: ASRProvider): void {
+    this.logger.info('收到语音转写结果', {
+      text: `${text.substring(0, 20)}${text.length > 20 ? '...' : ''}`,
+      isFinal,
+    })
+
+    const asrResult = this.buildASRResult(text, isFinal, provider)
+    const agentContext = this.agentModule.getCurrentContext()
+
+    this.logger.debug('智能决策输入', {
+      asrType: asrResult.asrType,
+      agentLoopState: agentContext.loopState,
+      canAcceptInput: agentContext.canAcceptInput,
+    })
+
+    const decision = this.detector.makeIntelligentDecision(asrResult, agentContext)
+    this.logger.info('智能决策结果', {
+      shouldSend: decision.shouldSend,
+      sendStrategy: decision.sendStrategy,
+      confidence: decision.confidence.toFixed(2),
+      reasoning: decision.reasoning,
+    })
+
+    this.bus.emit('decision.feedback', {
+      reasoning: decision.reasoning,
+      strategy: decision.sendStrategy,
+    })
+
+    if (!decision.shouldSend) return
+    this.bus.emit('decision.execute', { decision, text })
+  }
+
+  /**
+   * 构建统一 ASR 结果对象
+   */
+  private buildASRResult(
+    text: string,
+    isFinal: boolean | undefined,
+    provider: ASRProvider,
+  ): UnifiedASRResult {
+    return {
+      text,
+      isFinal: isFinal || false,
+      confidence: 0.8,
+      isComplete: false,
+      asrType: this.currentEngine,
+      metadata: this.extractASRMetadata(provider),
+    }
+  }
+
+  /**
+   * 按 Provider 能力提取元信息
+   */
+  private extractASRMetadata(provider: ASRProvider): Record<string, unknown> {
+    const metadata: Record<string, unknown> = {}
+    const typedProvider = provider as {
+      getCurrentRecognitionDetails?: () => {
+        definite?: boolean
+        utterances?: Array<{ text: string; definite: boolean }>
+      }
+      getCurrentResult?: () => {
+        interimText?: string
+        resultIndex?: number
+      }
+    }
+
+    if (typedProvider.getCurrentRecognitionDetails) {
+      try {
+        const details = typedProvider.getCurrentRecognitionDetails()
+        metadata.definite = details.definite
+        metadata.utterances = details.utterances || []
+      } catch (error) {
+        this.logger.warn('获取豆包ASR详细信息失败', { error })
+      }
+    }
+
+    if (typedProvider.getCurrentResult) {
+      try {
+        const result = typedProvider.getCurrentResult()
+        metadata.interimText = result.interimText
+        metadata.resultIndex = result.resultIndex
+      } catch (error) {
+        this.logger.warn('获取WebSpeech详细信息失败', { error })
+      }
+    }
+
+    return metadata
+  }
+}

@@ -7,12 +7,23 @@
  *   3. WebSpeech：基于isFinal + 启发式增强
  *   4. 即时指令识别（通用）
  */
-import type { UnifiedASRResult, AgentContext, IntelligentDecision } from '../types/intelligence'
-import { AgentLoopState } from '../types/intelligence'
-import { createLogger } from '../utils/logger'
+import type { UnifiedASRResult, AgentContext, IntelligentDecision } from '../../types/intelligence'
+import { AgentLoopState } from '../../types/intelligence'
+import {
+  createVoiceEventLogger,
+  VoiceLogEventEmitter,
+  VoiceLogEventSubscriber,
+  type VoiceLogEventListener,
+} from '../../events'
 
 export class UnifiedIntelligenceDetector {
-  private logger = createLogger('智能检测器')
+  private readonly eventEmitter = new VoiceLogEventEmitter()
+  private readonly logger = createVoiceEventLogger(this.eventEmitter)
+  private readonly eventLogger = new VoiceLogEventSubscriber('智能检测器', this.eventEmitter)
+
+  onEvent(listener: VoiceLogEventListener): () => void {
+    return this.eventEmitter.onEvent(listener)
+  }
 
   /**
    * 判断语音是否完整
@@ -272,5 +283,9 @@ export class UnifiedIntelligenceDetector {
     }
 
     return hasKeyword
+  }
+
+  dispose(): void {
+    this.eventLogger.dispose()
   }
 }

@@ -235,6 +235,16 @@ shared 类型和 IPC 常量
 
 渲染进程以 Jotai 管理状态，关键 atoms 位于 `apps/electron/src/renderer/atoms/`。Agent IPC 监听器在应用顶层全局挂载，避免切换页面时丢失流式事件、权限请求或后台任务状态。
 
+语音输入模块位于 `apps/electron/src/renderer/components/voice-dictation/`，当前采用统一分层：
+
+- `events/`：事件驱动总线（如自动发送请求事件）
+- `strategies/`：策略路由（按上下文选择自动发送策略）
+- `core/state/`：状态机内核与状态迁移队列
+- `core/runtime/`：音频采集、VAD、会话运行时
+- `core/intelligence/`：Agent 状态监控与智能决策检测
+- `core/commands/`：命令模式（即时指令/发送文本命令）
+- `core/orchestrator/Orchestrator.ts`：编排层，仅负责调度状态机、命令和策略
+
 ## 打包注意事项
 
 `@anthropic-ai/claude-agent-sdk` 在 `0.2.113+` 后改为平台 native binary 分发。Proma 的 esbuild 配置会把 SDK 标记为 external，`electron-builder.yml` 会把 SDK 主包和平台子包一起打进安装包。

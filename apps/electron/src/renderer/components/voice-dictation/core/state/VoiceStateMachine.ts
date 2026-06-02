@@ -10,9 +10,14 @@
  *   4. 提供统一的状态变更通知接口
  */
 
-import type { VoiceUIState } from '../../components/voice-dictation/types/panel'
+import type { VoiceUIState } from '../../types/panel'
 import type { VoiceDictationSettings } from '@/types/settings'
-import { createLogger } from '../utils/logger'
+import {
+  createVoiceEventLogger,
+  VoiceLogEventEmitter,
+  VoiceLogEventSubscriber,
+  type VoiceLogEventListener,
+} from '../../events'
 
 /**
  * 语音识别状态枚举
@@ -203,7 +208,9 @@ export class VoiceStateMachine {
   private currentState: VoiceState = VoiceState.STOPPED
   private behaviors: Map<VoiceState, StateBehavior>
   private stateChangeListeners: Set<(state: VoiceUIState) => void> = new Set()
-  private logger = createLogger('语音状态机')
+  private readonly eventEmitter = new VoiceLogEventEmitter()
+  private readonly logger = createVoiceEventLogger(this.eventEmitter)
+  private readonly eventLogger = new VoiceLogEventSubscriber('语音状态机', this.eventEmitter)
 
   constructor() {
     // 初始化所有状态行为
@@ -217,6 +224,10 @@ export class VoiceStateMachine {
     ])
 
     this.logger.info('语音状态机初始化完成', { initialState: this.currentState })
+  }
+
+  onEvent(listener: VoiceLogEventListener): () => void {
+    return this.eventEmitter.onEvent(listener)
   }
 
   /**
@@ -360,5 +371,6 @@ export class VoiceStateMachine {
     })
     this.stateChangeListeners.clear()
     this.behaviors.clear()
+    this.eventLogger.dispose()
   }
 }

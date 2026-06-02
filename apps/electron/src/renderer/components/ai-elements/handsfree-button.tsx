@@ -17,6 +17,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { handsfreeStateAtom } from '@/atoms/handsfree-state-atom'
+import { emitVoiceSettingsChanged } from '@/components/voice-dictation/events'
 
 export function HandsfreeButton({
   className,
@@ -39,7 +40,7 @@ export function HandsfreeButton({
         })
 
         await window.electronAPI.reregisterGlobalShortcuts()
-        window.dispatchEvent(new CustomEvent('proma:voice-settings-changed'))
+        emitVoiceSettingsChanged()
 
         if (nextEnabled) {
           toast.success('免提模式已开启，对着麦克风说话即可自动输入')

@@ -3,8 +3,8 @@
  *
  * 纯状态观察者模式：
  *   1. 创建 Orchestrator 实例
- *   2. 注入 onAutoSend 回调（转写文本 → Agent 会话）
- *   3. 订阅 UIState 变更 → setState 驱动渲染
+ *   2. 订阅 UIState 变更 → setState 驱动渲染
+ *   3. 桥接 Agent 上下文到 Orchestrator（不在 UI 做业务决策）
  *   4. 监听语音设置变更事件、IPC 快捷键停止事件
  *
  * 渲染方式：React Portal 到 document.body，z-index 9999，始终浮动。
@@ -14,99 +14,40 @@
  *   - recording: 340px 卡片，含图标 + 转录文本 + REC 指示灯 + 音量条
  *   - processing / completed / error: 卡片式结果展示
  *
- * @see ../core/Orchestrator.ts - 状态管理和自动发送回调
+ * @see ../core/orchestrator/Orchestrator.ts - 状态管理和自动发送回调
  */
 
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from 'jotai'
-import { Loader2, Check, Brain, Activity } from 'lucide-react'
-import { Orchestrator } from '../core/Orchestrator'
+import { Loader2, Check } from 'lucide-react'
+import { Orchestrator } from '../core/orchestrator/Orchestrator'
 import type { VoiceUIState } from '../types/panel'
-import { agentChannelIdAtom, currentAgentSessionIdAtom, currentAgentWorkspaceIdAtom, agentSessionDraftsAtom, agentSessionDraftHtmlAtom, liveMessagesMapAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
+import { currentAgentSessionIdAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
-import { shouldAutoSend } from '../utils/auto-send'
-import type { SDKMessage } from '@proma/shared'
-import { AgentStateMonitor } from '../core/AgentStateMonitor'
-import type { AgentContext } from '../types/intelligence'
+import { onVoiceSettingsChanged } from '../events'
 
 export function VoiceFloatingPanel(): React.ReactElement {
   const store = useStore()
-  const orchRef = React.useRef<Orchestrator | null>(null)
-  const agentMonitorRef = React.useRef<AgentStateMonitor | null>(null)
   /** UI 状态（由 Orchestrator 的 emit 驱动更新） */
   const [ui, setUI] = React.useState<VoiceUIState>({
     state: 'stopped', volume: 0, transcript: '', message: '', settings: null,
   })
-  /** 智能决策信息 */
-  const [intelligentInfo, setIntelligentInfo] = React.useState<{
-    isActive: boolean
-    agentState: string
-    decision: string
-    reasoning: string
-    confidence: number
-  }>({
-    isActive: false,
-    agentState: 'unknown',
-    decision: 'unknown',
-    reasoning: '',
-    confidence: 0
-  })
 
   /**
-   * 初始化 Orchestrator 和 Agent 状态监听器
+   * 初始化 Orchestrator 并桥接状态
    *
    * 执行顺序：
-   *   1. 创建 Orchestrator + AgentStateMonitor
-   *   2. 注入 onAutoSend（转写文本 → 清除代理草稿 → 构造 user 消息 → 发送到 Agent 会话）
-   *   3. 订阅 UIState 变更 → setUI
-   *   4. 加载语音设置并切换免提
-   *   5. 集成 Agent 状态监听器 → 智能决策
-   *   6. 监听 proma:voice-settings-changed 事件（设置页变更时动态切换）
-   *   7. 监听 onVoiceDictationToggleStop（快捷键停止录音）
-   *   8. 清理：取消订阅 → 销毁所有组件
+   *   1. 创建 Orchestrator
+   *   2. 订阅 UIState 变更 → setUI
+   *   3. 加载语音设置并切换免提
+   *   4. 同步 Agent 上下文到 Orchestrator（状态桥接）
+   *   5. 监听 proma:voice-settings-changed 事件（设置页变更时动态切换）
+   *   6. 监听 onVoiceDictationToggleStop（快捷键停止录音）
+   *   7. 清理：取消订阅 → 销毁所有组件
    */
   React.useEffect(() => {
     const orch = new Orchestrator()
-    orchRef.current = orch
-
-    // 🎯 创建 Agent 状态监听器
-    const agentMonitor = new AgentStateMonitor()
-    agentMonitorRef.current = agentMonitor
-
-    console.log('[VoiceFloatingPanel] 初始化智能语音识别系统')
-
-    // 注入自动发送回调：转写文本 → 当前 Agent 会话
-    orch.onAutoSend = (text: string) => {
-      if (store.get(appModeAtom) !== 'agent') return
-      const channelId = store.get(agentChannelIdAtom)
-      const sessionId = store.get(currentAgentSessionIdAtom)
-      const workspaceId = store.get(currentAgentWorkspaceIdAtom)
-
-      // 🎯 设置当前Agent会话ID到Orchestrator，用于即时指令打断
-      orch.setCurrentAgentSessionId(sessionId)
-
-      if (!sessionId || !channelId) return
-
-      // 🎯 智能决策已经在Orchestrator中处理，这里直接发送
-      // Orchestrator.makeIntelligentDecision会判断是否应该发送
-
-      // 清除草稿
-      store.set(agentSessionDraftsAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
-      store.set(agentSessionDraftHtmlAtom, (prev) => { const m = new Map(prev); m.delete(sessionId); return m })
-      // 构造 user 消息并追加到消息列表
-      store.set(liveMessagesMapAtom, (prev) => {
-        const m = new Map(prev); const existing = m.get(sessionId) ?? []
-        m.set(sessionId, [...existing, { type: 'user', message: { content: [{ type: 'text', text }] }, parent_tool_use_id: null, _createdAt: Date.now() } as unknown as SDKMessage])
-        return m
-      })
-      // 标记流式状态为 running
-      store.set(agentStreamingStatesAtom, (prev) => {
-        const m = new Map(prev); m.set(sessionId, { running: true, content: '', toolActivities: [], startedAt: Date.now() }); return m
-      })
-      // 通过 IPC 发送消息
-      window.electronAPI.sendAgentMessage({ sessionId, userMessage: text, channelId, workspaceId: workspaceId ?? undefined }).catch(console.error)
-    }
 
     // 订阅 UI 状态变更
     const unsub = orch.onUIState((s) => setUI({ ...s }))
@@ -116,84 +57,37 @@ export function VoiceFloatingPanel(): React.ReactElement {
       orch.toggleHandsfree(s).catch(() => {})
     }).catch(() => {})
 
-    // 🎯 集成 Agent 状态监听器
-    const monitorAgentState = () => {
+    // 同步 Agent 上下文到 Orchestrator（UI 仅负责桥接状态，不做决策）
+    const syncAgentContext = () => {
       try {
-        const streamingState = store.get(agentStreamingStatesAtom)
+        const streamingStates = store.get(agentStreamingStatesAtom)
         const sessionId = store.get(currentAgentSessionIdAtom)
-        const appMode = store.get(appModeAtom)
+        const mode = store.get(appModeAtom)
+        const activeState = sessionId ? streamingStates.get(sessionId) : undefined
+        const normalizedMode = mode === 'agent' ? 'agent' : 'chat'
 
-        if (sessionId && streamingState && appMode === 'agent') {
-          // 获取当前会话的状态
-          const currentSessionState = streamingState.get(sessionId)
-
-          if (currentSessionState) {
-            // 🎯 同步sessionId到Orchestrator，用于即时指令打断
-            orch.setCurrentAgentSessionId(sessionId)
-
-            // 更新 Agent 状态监听器
-            agentMonitor.updateAgentState?.({
-              mode: 'agent',
-              status: currentSessionState.running ? 'processing' : 'idle',
-              streamingState: {
-                running: currentSessionState.running,
-                content: currentSessionState.content || '',
-                toolActivities: currentSessionState.toolActivities?.map(t => t.toolName) || []
-              },
-              hasError: false, // AgentStreamState中没有错误字段，暂时设为false
-              recentMessages: [],
-              lastUserMessageTime: Date.now()
-            })
-
-            // 获取当前 Agent 上下文
-            const agentContext = agentMonitor.getCurrentContext?.()
-            if (agentContext) {
-              // 更新智能决策信息显示
-              setIntelligentInfo({
-                isActive: true,
-                agentState: agentContext.loopState,
-                decision: agentContext.canAcceptInput ? '可接受输入' : '等待空闲',
-                reasoning: `Agent状态: ${agentContext.loopState}, 工具活动: ${agentContext.activeToolCalls.length}个`,
-                confidence: agentContext.canAcceptInput ? 0.9 : 0.6
-              })
-            }
-          } else {
-            // 会话存在但没有状态数据
-            setIntelligentInfo({
-              isActive: true,
-              agentState: 'unknown',
-              decision: '初始化中',
-              reasoning: '会话正在初始化',
-              confidence: 0.3
-            })
-          }
-        } else {
-          // 非 Agent 模式或无活跃会话
-          setIntelligentInfo({
-            isActive: false,
-            agentState: 'unknown',
-            decision: 'unknown',
-            reasoning: '非Agent模式或无活跃会话',
-            confidence: 0
-          })
-        }
+        orch.setCurrentAgentSessionId(mode === 'agent' ? (sessionId ?? null) : null)
+        orch.updateAgentState({
+          mode: normalizedMode,
+          status: activeState?.running ? 'processing' : 'idle',
+          streamingState: {
+            running: activeState?.running ?? false,
+            content: activeState?.content ?? '',
+            toolActivities: activeState?.toolActivities?.map((activity) => activity.toolName) ?? [],
+          },
+          hasError: false,
+          recentMessages: [],
+          lastUserMessageTime: Date.now(),
+        })
       } catch (error) {
-        console.error('[VoiceFloatingPanel] Agent状态监听错误:', error)
+        console.error('[VoiceFloatingPanel] 同步Agent上下文失败:', error)
       }
     }
 
-    // 监听 Agent 状态变化
-    const unsubscribeAtom = store.sub(agentStreamingStatesAtom, () => {
-      monitorAgentState()
-    })
-
-    // 监听应用模式变化
-    const unsubscribeMode = store.sub(appModeAtom, () => {
-      monitorAgentState()
-    })
-
-    // 初始调用
-    monitorAgentState()
+    const unsubscribeStreaming = store.sub(agentStreamingStatesAtom, syncAgentContext)
+    const unsubscribeSession = store.sub(currentAgentSessionIdAtom, syncAgentContext)
+    const unsubscribeMode = store.sub(appModeAtom, syncAgentContext)
+    syncAgentContext()
 
     // 监听设置变更事件（设置页修改时同步）
     const handler = () => {
@@ -201,7 +95,7 @@ export function VoiceFloatingPanel(): React.ReactElement {
         orch.toggleHandsfree(s).catch(() => {})
       }).catch(() => {})
     }
-    window.addEventListener('proma:voice-settings-changed', handler)
+    const unsubscribeSettingsChanged = onVoiceSettingsChanged(handler)
 
     // 监听 IPC 停止录音通知（快捷键）
     const cts = window.electronAPI.onVoiceDictationToggleStop(() => {
@@ -210,19 +104,18 @@ export function VoiceFloatingPanel(): React.ReactElement {
 
     return () => {
       unsub()
-      unsubscribeAtom?.()
+      unsubscribeStreaming?.()
+      unsubscribeSession?.()
       unsubscribeMode?.()
-      window.removeEventListener('proma:voice-settings-changed', handler)
+      unsubscribeSettingsChanged()
       cts()
       orch.destroy()
-      agentMonitor.dispose?.()
     }
   }, [store])
 
   const { state, volume, transcript, message, settings } = ui
   const enabled = settings?.handsfreeEnabled ?? false
   const hasAudio = volume > 0.02
-  const showIntelligentInfo = intelligentInfo.isActive && (state === 'recording' || state === 'listening')
 
   const panel = (
     <div className="fixed bottom-4 right-4 z-[9999]">
@@ -278,15 +171,6 @@ export function VoiceFloatingPanel(): React.ReactElement {
                 <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
                   {state === 'recording' ? (message || '聆听中...') : ''}
                 </p>
-                {/* 🎯 智能决策信息显示 */}
-                {showIntelligentInfo && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <Brain className="size-3 text-purple-500" />
-                    <p className="text-xs text-purple-400 dark:text-purple-500">
-                      {intelligentInfo.agentState}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           </div>

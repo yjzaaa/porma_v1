@@ -259,6 +259,14 @@ bun run generate:icons    # 生成应用图标
 - **`file-browser/`**：文件浏览器 — FileBrowser（工作区文件树浏览）
 - **`ai-elements/`**：AI 展示组件 — Markdown 渲染、代码块、Mermaid 图、推理折叠、上下文分割线、富文本输入
 - **`ui/`**：Radix UI 组件（现代化设计，CSS 变量主题）
+- **`voice-dictation/`**：语音输入模块（统一风格）  
+  - `events/`：事件驱动事件总线  
+  - `strategies/`：策略路由（自动发送策略）  
+  - `core/state/`：状态机（`VoiceStateMachine` + `StateTransitionQueue`）  
+  - `core/runtime/`：音频与会话运行时（`AudioHub` / `VADDetector` / `Session`）  
+  - `core/intelligence/`：智能决策上下文（`AgentStateMonitor` / `UnifiedIntelligenceDetector`）  
+  - `core/commands/`：命令模式（即时指令、发送文本命令）  
+  - `core/orchestrator/Orchestrator.ts`：编排层（仅负责调度，不承载具体动作实现）
 
 ### 全局 Hooks（`renderer/hooks/`）
 
