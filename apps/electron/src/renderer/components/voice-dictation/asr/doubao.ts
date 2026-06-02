@@ -323,8 +323,16 @@ export class DoubaoProvider implements ASRProvider {
   private handleStateEvent(event: VoiceDictationStateEvent): void {
     if (event.sessionId && event.sessionId !== this.sessionId) return
     this.eventBus.emit('state', { state: event.status, message: event.message })
-    if (this.stopping && (event.status === 'idle' || event.status === 'completed' || event.status === 'error')) {
-      this.resolveStopWait()
+
+    // 当会话进入 idle/completed/error 状态时，ASR 已不可用
+    if (event.status === 'idle' || event.status === 'completed' || event.status === 'error') {
+      this.asrReady = false
+      if (this.stopping) {
+        this.resolveStopWait()
+      } else if (event.status === 'idle' && event.message === 'asr_session_ended') {
+        // 健康检查导致的会话断开，视为错误
+        this.eventBus.emit('error', { message: 'ASR 会话因长时间无活动已断开' })
+      }
     }
   }
 

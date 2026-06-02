@@ -265,9 +265,21 @@ export class VoiceCaptureModule extends BaseVoiceModule {
         this.resolveSessionCompletion(session)
         return
       }
+      this.logger.warn('会话出错', { message })
       this.session = null
       this.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message })
       this.resolveSessionCompletion(session)
+
+      // 🔧 免提模式下，如果用户仍在说话，立即重启会话
+      if (this.handsfreeEnabled && this.vad.isSpeaking) {
+        this.logger.info('用户仍在说话，立即重启会话')
+        // 延迟一小段时间确保旧会话完全释放
+        setTimeout(() => {
+          if (this.handsfreeEnabled && !this.session) {
+            this.startSession()
+          }
+        }, 100)
+      }
     })
   }
 
