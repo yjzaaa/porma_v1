@@ -232,7 +232,18 @@ export function GlobalShortcuts(): null {
   const dispatchVoiceAutoSend = useCallback((rawText: string) => {
     const trimmed = rawText.trim()
     if (!shouldAutoSend(trimmed, voiceDictationSettings?.autoSendEnabled ?? true, 'always')) return
-    if (store.get(appModeAtom) !== 'agent') return
+    const appMode = store.get(appModeAtom)
+
+    if (appMode === 'chat') {
+      const conversationId = store.get(currentConversationIdAtom)
+      if (!conversationId) return
+      store.set(chatPendingMessageAtom, {
+        conversationId,
+        message: trimmed,
+      })
+      return
+    }
+    if (appMode !== 'agent') return
 
     const channelId = store.get(agentChannelIdAtom)
     const sessionId = store.get(currentAgentSessionIdAtom)

@@ -78,11 +78,13 @@ export function useAgentSend(
   const hasAvailableModel = React.useMemo(() => {
     const promaOfficial = globalChannels.find((c) => c.id === 'proma-official')
     if (promaOfficial?.enabled && promaOfficial.models.some((m) => m.enabled)) return true
-    if (!agentChannelIds || agentChannelIds.length === 0) return false
+    const allowedChannelIds = new Set(agentChannelIds)
+    if (agentChannelId) allowedChannelIds.add(agentChannelId)
+    if (allowedChannelIds.size === 0) return false
     return globalChannels.some(
-      (c) => c.enabled && agentChannelIds.includes(c.id) && c.models.some((m) => m.enabled),
+      (c) => c.enabled && allowedChannelIds.has(c.id) && c.models.some((m) => m.enabled),
     )
-  }, [globalChannels, agentChannelIds])
+  }, [globalChannels, agentChannelIds, agentChannelId])
 
   // 输入框内容 - 按 sessionId 切片订阅以优化重渲染
   const inputContent = useAtomValue(agentSessionDraftAtomFamily(sessionId))
@@ -340,4 +342,3 @@ export function useAgentSend(
     inputHtmlContent, setInputHtmlContent, suggestion, agentChannelId, hasChannelWarning,
   }
 }
-

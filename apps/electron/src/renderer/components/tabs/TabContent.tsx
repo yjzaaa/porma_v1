@@ -8,7 +8,7 @@
 import * as React from 'react'
 import { useAtomValue } from 'jotai'
 import { tabsAtom } from '@/atoms/tab-atoms'
-import { ChatView } from '@/components/chat'
+import { ChatView } from '@/components/chat/ChatViewScreen'
 import { AgentView } from '@/components/agent'
 import { ScratchPadView } from '@/components/scratch-pad/ScratchPadView'
 import { TabErrorBoundary } from './TabErrorBoundary'

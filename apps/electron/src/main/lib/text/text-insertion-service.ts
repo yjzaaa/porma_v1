@@ -200,71 +200,10 @@ function getErrorMessage(error: unknown): string {
 }
 
 const WINDOWS_SEND_INPUT_SCRIPT = String.raw`
-$signature = @"
-using System;
-using System.Runtime.InteropServices;
-
-public static class PromaKeyboardInput
-{
-    private const int INPUT_KEYBOARD = 1;
-    private const uint KEYEVENTF_KEYUP = 0x0002;
-    private const ushort VK_CONTROL = 0x11;
-    private const ushort VK_V = 0x56;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct INPUT
-    {
-        public int type;
-        public InputUnion U;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    private struct InputUnion
-    {
-        [FieldOffset(0)]
-        public KEYBDINPUT ki;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KEYBDINPUT
-    {
-        public ushort wVk;
-        public ushort wScan;
-        public uint dwFlags;
-        public uint time;
-        public UIntPtr dwExtraInfo;
-    }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-
-    public static void Paste()
-    {
-        INPUT[] inputs = new INPUT[4];
-
-        inputs[0].type = INPUT_KEYBOARD;
-        inputs[0].U.ki.wVk = VK_CONTROL;
-
-        inputs[1].type = INPUT_KEYBOARD;
-        inputs[1].U.ki.wVk = VK_V;
-
-        inputs[2].type = INPUT_KEYBOARD;
-        inputs[2].U.ki.wVk = VK_V;
-        inputs[2].U.ki.dwFlags = KEYEVENTF_KEYUP;
-
-        inputs[3].type = INPUT_KEYBOARD;
-        inputs[3].U.ki.wVk = VK_CONTROL;
-        inputs[3].U.ki.dwFlags = KEYEVENTF_KEYUP;
-
-        uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
-        if (sent != inputs.Length)
-        {
-            throw new InvalidOperationException("SendInput failed: " + Marshal.GetLastWin32Error());
-        }
-    }
+try {
+  $ws = New-Object -ComObject WScript.Shell
+  $ws.SendKeys("^v")
+} catch {
+  throw "SendKeys failed: $($_.Exception.Message)"
 }
-"@
-
-Add-Type -TypeDefinition $signature
-[PromaKeyboardInput]::Paste()
 `

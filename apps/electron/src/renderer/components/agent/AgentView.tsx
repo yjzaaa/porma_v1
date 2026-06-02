@@ -38,6 +38,7 @@ import {
   allPendingExitPlanRequestsAtom,
 } from '@/atoms/agent-atoms'
 import type { AgentContextStatus } from '@/atoms/agent-atoms'
+import { channelsAtom } from '@/atoms/chat-atoms'
 import { autoPreviewEnabledAtom, previewPanelOpenMapAtom, quotedSelectionMapAtom, currentQuotedSelectionAtom } from '@/atoms/preview-atoms'
 import { settingsOpenAtom } from '@/atoms/settings-tab'
 import { AgentSessionProvider } from '@/contexts/session-context'
@@ -118,6 +119,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   const agentChannelId = sessionChannelMap.get(sessionId) ?? defaultChannelId
   const agentModelId = sessionModelMap.get(sessionId) ?? defaultModelId
   const [agentChannelIds, setAgentChannelIds] = useAtom(agentChannelIdsAtom)
+  const channels = useAtomValue(channelsAtom)
   const [agentThinking, setAgentThinking] = useAtom(agentThinkingAtom)
   const setSettingsOpen = useSetAtom(settingsOpenAtom)
   const setPreviewOpenMap = useSetAtom(previewPanelOpenMapAtom)
@@ -176,9 +178,67 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     setQuotedSelectionMap((prev) => { const m = new Map(prev); m.delete(sessionId); return m })
   }, [sessionId, setQuotedSelectionMap])
 
+  React.useEffect(() => {
+    if (channels.length === 0) return
+
+    const visibleChannels = channels.filter((channel) =>
+      channel.enabled && (agentChannelIds.length === 0 || agentChannelIds.includes(channel.id)),
+    )
+    if (visibleChannels.length === 0) return
+
+    const currentChannel = visibleChannels.find((channel) => channel.id === agentChannelId)
+    const currentModelEnabled = currentChannel?.models.some(
+      (model) => model.enabled && model.id === agentModelId,
+    ) ?? false
+    if (currentChannel && currentModelEnabled) return
+
+    const fallbackChannel =
+      currentChannel ??
+      visibleChannels.find((channel) => channel.models.some((model) => model.enabled))
+    const fallbackModel = fallbackChannel?.models.find((model) => model.enabled)
+    if (!fallbackChannel || !fallbackModel) return
+
+    setSessionChannelMap((prev) => {
+      const map = new Map(prev)
+      map.set(sessionId, fallbackChannel.id)
+      return map
+    })
+    setSessionModelMap((prev) => {
+      const map = new Map(prev)
+      map.set(sessionId, fallbackModel.id)
+      return map
+    })
+    setDefaultChannelId(fallbackChannel.id)
+    setDefaultModelId(fallbackModel.id)
+
+    const nextChannelIds = agentChannelIds.includes(fallbackChannel.id)
+      ? agentChannelIds
+      : [...agentChannelIds, fallbackChannel.id]
+    if (nextChannelIds !== agentChannelIds) {
+      setAgentChannelIds(nextChannelIds)
+    }
+
+    window.electronAPI.updateSettings({
+      agentChannelId: fallbackChannel.id,
+      agentModelId: fallbackModel.id,
+      agentChannelIds: nextChannelIds,
+    }).catch(console.error)
+  }, [
+    sessionId,
+    channels,
+    agentChannelId,
+    agentModelId,
+    agentChannelIds,
+    setSessionChannelMap,
+    setSessionModelMap,
+    setDefaultChannelId,
+    setDefaultModelId,
+    setAgentChannelIds,
+  ])
+
   // ---- 工具栏 ----
   const inputToolbarItems = React.useMemo<ToolbarItem[]>(() => [
-    { key: 'model', node: <ModelSelector filterChannelIds={agentChannelIds} externalSelectedModel={externalSelectedModel} onModelSelect={handleModelSelect} /> },
+    { key: 'model', node: <ModelSelector externalSelectedModel={externalSelectedModel} onModelSelect={handleModelSelect} /> },
     { key: 'permission-mode', node: <PermissionModeSelector sessionId={sessionId} /> },
     { key: 'thinking', node: <AgentThinkingPopover agentThinking={agentThinking} onToggle={handleToggleThinking} /> },
     { key: 'speech', node: <SpeechButton className="size-[36px] shrink-0 rounded-full" /> },
@@ -193,7 +253,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
       ),
     },
     { key: 'auto-preview', node: <DisplayOptionsPopover autoPreviewEnabled={autoPreviewEnabled} processGroupsKeepExpanded={processGroupsKeepExpanded} onAutoPreviewChange={setAutoPreviewEnabled} onProcessGroupsKeepExpandedChange={setProcessGroupsKeepExpanded} /> },
-  ], [agentChannelIds, externalSelectedModel, handleModelSelect, agentThinking, handleToggleThinking,
+  ], [externalSelectedModel, handleModelSelect, agentThinking, handleToggleThinking,
       fileAttach.attachFromDialog, fileAttach.attachFolder, contextStatus, sessionLoad.streaming, stopHook.compact,
       autoPreviewEnabled, processGroupsKeepExpanded, setAutoPreviewEnabled, setProcessGroupsKeepExpanded, agentModelId])
 
