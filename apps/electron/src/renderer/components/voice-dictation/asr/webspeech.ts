@@ -23,7 +23,7 @@ import {
   VoiceLogEventEmitter,
   VoiceLogEventSubscriber,
   type VoiceLogEventListener,
-} from '../events'
+} from '../ui-events'
 
 /** Web Speech API 类型 shim（TS 内置类型中未完整包含） */
 interface SpeechRecognition_ {

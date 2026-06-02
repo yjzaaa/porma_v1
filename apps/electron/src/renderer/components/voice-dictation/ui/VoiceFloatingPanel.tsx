@@ -25,7 +25,7 @@ import { Orchestrator } from '../core/orchestrator/Orchestrator'
 import type { VoiceUIState } from '../types/panel'
 import { currentAgentSessionIdAtom, agentStreamingStatesAtom } from '@/atoms/agent-atoms'
 import { appModeAtom } from '@/atoms/app-mode'
-import { onVoiceSettingsChanged } from '../events'
+import { onVoiceSettingsChanged } from '../ui-events'
 
 export function VoiceFloatingPanel(): React.ReactElement {
   const store = useStore()

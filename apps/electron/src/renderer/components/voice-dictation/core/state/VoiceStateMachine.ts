@@ -17,7 +17,7 @@ import {
   VoiceLogEventEmitter,
   VoiceLogEventSubscriber,
   type VoiceLogEventListener,
-} from '../../events'
+} from '../../ui-events'
 
 /**
  * 语音识别状态枚举
@@ -105,7 +105,12 @@ class ListeningStateBehavior implements StateBehavior {
   }
 
   allowedNextStates(): VoiceState[] {
-    return [VoiceState.RECORDING, VoiceState.STOPPED]
+    return [
+      VoiceState.RECORDING,
+      VoiceState.PROCESSING,
+      VoiceState.COMPLETED,
+      VoiceState.STOPPED,
+    ]
   }
 }
 

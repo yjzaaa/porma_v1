@@ -8,13 +8,14 @@
 
 import type { VoiceDictationSettings } from '@/types/settings'
 import type { UIStateListener } from '../../types/panel'
-import type { VoiceLogEventListener, VoiceEventLogger } from '../../events'
+import type { VoiceLogEventListener, VoiceEventLogger } from '../../ui-events'
 import {
   createVoiceEventLogger,
   VoiceLogEventEmitter,
   VoiceLogEventSubscriber,
-} from '../../events'
+} from '../../ui-events'
 import { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 import { VoiceAgentModule } from '../modules/VoiceAgentModule'
 import { VoiceCaptureModule } from '../modules/VoiceCaptureModule'
 import { VoiceDecisionModule } from '../modules/VoiceDecisionModule'
@@ -97,35 +98,35 @@ export class Orchestrator {
    * 发布「切换免提」命令
    */
   async toggleHandsfree(settings: VoiceDictationSettings): Promise<void> {
-    this.bus.emit('command.toggle_handsfree', { settings })
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, { settings })
   }
 
   /**
    * 发布「停止录音」命令
    */
   async stopRecording(): Promise<void> {
-    this.bus.emit('command.stop_recording', undefined)
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.stopRecording, undefined)
   }
 
   /**
    * 发布 Agent 状态更新命令
    */
   updateAgentState(state: AgentStateUpdatePayload): void {
-    this.bus.emit('command.update_agent_state', state)
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.updateAgentState, state)
   }
 
   /**
    * 发布最近消息追加命令
    */
   addRecentMessage(message: string): void {
-    this.bus.emit('command.add_recent_message', { message })
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.addRecentMessage, { message })
   }
 
   /**
    * 发布 Agent 会话 ID 更新命令
    */
   setCurrentAgentSessionId(sessionId: string | null): void {
-    this.bus.emit('command.set_agent_session_id', { sessionId })
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId, { sessionId })
   }
 
   /**
@@ -142,7 +143,7 @@ export class Orchestrator {
    */
   destroy(): void {
     this.logger.info('销毁语音运行时')
-    this.bus.emit('command.destroy', undefined)
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.command.destroy, undefined)
     this.actionModule.dispose()
     this.commandModule.dispose()
     this.decisionModule.dispose()

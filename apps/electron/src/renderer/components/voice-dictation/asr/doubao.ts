@@ -27,7 +27,7 @@ import {
   VoiceLogEventEmitter,
   VoiceLogEventSubscriber,
   type VoiceLogEventListener,
-} from '../events'
+} from '../ui-events'
 
 /** AudioContext 引用（兼容 WebKit 前缀） */
 const ACTX = (window as any).AudioContext ?? (window as any).webkitAudioContext as typeof AudioContext | undefined

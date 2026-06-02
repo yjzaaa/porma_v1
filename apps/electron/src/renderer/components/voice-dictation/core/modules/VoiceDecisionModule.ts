@@ -4,8 +4,9 @@
 
 import type { ASRProvider } from '../../types/asr'
 import type { UnifiedASRResult } from '../../types/intelligence'
-import type { VoiceEventLogger } from '../../events'
+import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 import { UnifiedIntelligenceDetector } from '../intelligence/UnifiedIntelligenceDetector'
 import { VoiceAgentModule } from './VoiceAgentModule'
 
@@ -27,13 +28,13 @@ export class VoiceDecisionModule {
     private readonly logger: VoiceEventLogger,
   ) {
     this.unsubs.push(
-      this.bus.on('command.toggle_handsfree', ({ settings }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
         this.currentEngine = settings.engine || 'doubao'
       }),
-      this.bus.on('session.transcript', ({ text, isFinal, provider }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.transcript, ({ text, isFinal, provider }) => {
         this.handleTranscript(text, isFinal, provider)
       }),
-      this.bus.on('session.complete', ({ text }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.complete, ({ text }) => {
         this.handleSessionComplete(text)
       }),
     )
@@ -77,7 +78,7 @@ export class VoiceDecisionModule {
       reasoning: decision.reasoning,
     })
 
-    this.bus.emit('decision.feedback', {
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.decision.feedback, {
       reasoning: decision.reasoning,
       strategy: decision.sendStrategy,
     })
@@ -88,7 +89,7 @@ export class VoiceDecisionModule {
       return
     }
     this.markSent(text)
-    this.bus.emit('decision.execute', { decision, text })
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text })
   }
 
   /**
@@ -122,7 +123,7 @@ export class VoiceDecisionModule {
       reasoning: decision.reasoning,
     })
     this.markSent(finalText)
-    this.bus.emit('decision.execute', { decision, text: finalText })
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, { decision, text: finalText })
   }
 
   /**

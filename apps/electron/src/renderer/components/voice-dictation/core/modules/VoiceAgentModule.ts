@@ -2,8 +2,9 @@
  * Agent 上下文模块（发布者/订阅者）
  */
 
-import type { VoiceEventLogger } from '../../events'
+import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 import { AgentStateMonitor } from '../intelligence/AgentStateMonitor'
 
 export class VoiceAgentModule {
@@ -19,7 +20,7 @@ export class VoiceAgentModule {
     private readonly logger: VoiceEventLogger,
   ) {
     this.unsubs.push(
-      this.bus.on('command.update_agent_state', (payload) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.updateAgentState, (payload) => {
         this.monitor.updateAgentState(payload)
         this.logger.debug('Agent状态已更新', {
           mode: payload.mode,
@@ -27,13 +28,13 @@ export class VoiceAgentModule {
           hasError: payload.hasError,
         })
       }),
-      this.bus.on('command.add_recent_message', ({ message }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.addRecentMessage, ({ message }) => {
         this.monitor.addRecentMessage(message)
         this.logger.debug('最近消息已添加', {
           message: `${message.substring(0, 20)}${message.length > 20 ? '...' : ''}`,
         })
       }),
-      this.bus.on('command.set_agent_session_id', ({ sessionId }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId, ({ sessionId }) => {
         this.currentAgentSessionId = sessionId
         this.logger.debug('Agent会话ID已更新', { sessionId })
       }),

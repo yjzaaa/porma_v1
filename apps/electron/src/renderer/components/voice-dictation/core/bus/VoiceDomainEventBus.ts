@@ -5,6 +5,28 @@
 import type { VoiceDictationSettings } from '@/types/settings'
 import type { ASRProvider } from '../../types/asr'
 import type { IntelligentDecision } from '../../types/intelligence'
+import {
+  VOICE_ACTION_HANDLE_IMMEDIATE_INSTRUCTION_EVENT,
+  VOICE_ACTION_SEND_VOICE_TEXT_EVENT,
+  VOICE_COMMAND_ADD_RECENT_MESSAGE_EVENT,
+  VOICE_COMMAND_DESTROY_EVENT,
+  VOICE_COMMAND_SET_AGENT_SESSION_ID_EVENT,
+  VOICE_COMMAND_STOP_RECORDING_EVENT,
+  VOICE_COMMAND_TOGGLE_HANDSFREE_EVENT,
+  VOICE_COMMAND_UPDATE_AGENT_STATE_EVENT,
+  VOICE_DECISION_EXECUTE_EVENT,
+  VOICE_DECISION_FEEDBACK_EVENT,
+  VOICE_HANDSFREE_DISABLED_EVENT,
+  VOICE_HANDSFREE_ENABLED_EVENT,
+  VOICE_HANDSFREE_FAILED_EVENT,
+  VOICE_SESSION_COMPLETE_EVENT,
+  VOICE_SESSION_ERROR_EVENT,
+  VOICE_SESSION_METADATA_EVENT,
+  VOICE_SESSION_STARTED_EVENT,
+  VOICE_SESSION_TRANSCRIPT_EVENT,
+  VOICE_SESSION_VOLUME_EVENT,
+  VOICE_DOMAIN_EVENT_KEYS,
+} from './VoiceDomainEventKeys'
 
 export interface AgentStateUpdatePayload {
   /** 当前模式（Agent / Chat） */
@@ -31,29 +53,48 @@ export interface AgentStateUpdatePayload {
  * - decision.*：智能决策链路
  */
 export interface VoiceDomainEventMap {
-  'command.toggle_handsfree': { settings: VoiceDictationSettings }
-  'command.stop_recording': undefined
-  'command.update_agent_state': AgentStateUpdatePayload
-  'command.add_recent_message': { message: string }
-  'command.set_agent_session_id': { sessionId: string | null }
-  'command.destroy': undefined
+  /** 切换免提录音 */
+  [VOICE_COMMAND_TOGGLE_HANDSFREE_EVENT]: { settings: VoiceDictationSettings }
+  /** 停止当前录音 */
+  [VOICE_COMMAND_STOP_RECORDING_EVENT]: undefined
+  /** 更新 Agent 状态快照 */
+  [VOICE_COMMAND_UPDATE_AGENT_STATE_EVENT]: AgentStateUpdatePayload
+  /** 追加最近一条消息 */
+  [VOICE_COMMAND_ADD_RECENT_MESSAGE_EVENT]: { message: string }
+  /** 设置当前 Agent 会话 ID */
+  [VOICE_COMMAND_SET_AGENT_SESSION_ID_EVENT]: { sessionId: string | null }
+  /** 销毁语音模块 */
+  [VOICE_COMMAND_DESTROY_EVENT]: undefined
 
-  'handsfree.enabled': { settings: VoiceDictationSettings }
-  'handsfree.disabled': undefined
-  'handsfree.failed': { message: string; error?: unknown }
+  /** 免提已启用 */
+  [VOICE_HANDSFREE_ENABLED_EVENT]: { settings: VoiceDictationSettings }
+  /** 免提已关闭 */
+  [VOICE_HANDSFREE_DISABLED_EVENT]: undefined
+  /** 免提启用失败 */
+  [VOICE_HANDSFREE_FAILED_EVENT]: { message: string; error?: unknown }
 
-  'session.started': { engine: string }
-  'session.volume': { peak: number }
-  'session.transcript': { text: string; isFinal?: boolean; provider: ASRProvider }
-  'session.metadata': { message: string }
-  'session.complete': { text: string; commitMessage: string }
-  'session.error': { message: string }
+  /** 录音会话已开始 */
+  [VOICE_SESSION_STARTED_EVENT]: { engine: string }
+  /** 录音音量变化 */
+  [VOICE_SESSION_VOLUME_EVENT]: { peak: number }
+  /** 录音转写结果 */
+  [VOICE_SESSION_TRANSCRIPT_EVENT]: { text: string; isFinal?: boolean; provider: ASRProvider }
+  /** 录音会话元数据 */
+  [VOICE_SESSION_METADATA_EVENT]: { message: string }
+  /** 录音会话完成 */
+  [VOICE_SESSION_COMPLETE_EVENT]: { text: string; commitMessage: string }
+  /** 录音会话出错 */
+  [VOICE_SESSION_ERROR_EVENT]: { message: string }
 
-  'decision.feedback': { reasoning: string; strategy: IntelligentDecision['sendStrategy'] }
-  'decision.execute': { decision: IntelligentDecision; text: string }
+  /** 决策反馈 */
+  [VOICE_DECISION_FEEDBACK_EVENT]: { reasoning: string; strategy: IntelligentDecision['sendStrategy'] }
+  /** 决策执行 */
+  [VOICE_DECISION_EXECUTE_EVENT]: { decision: IntelligentDecision; text: string }
 
-  'action.send_voice_text': { text: string; reasoning: string }
-  'action.handle_immediate_instruction': { command: string; reasoning: string }
+  /** 发送语音文本 */
+  [VOICE_ACTION_SEND_VOICE_TEXT_EVENT]: { text: string; reasoning: string }
+  /** 处理即时指令 */
+  [VOICE_ACTION_HANDLE_IMMEDIATE_INSTRUCTION_EVENT]: { command: string; reasoning: string }
 }
 
 export type VoiceDomainEventType = keyof VoiceDomainEventMap
@@ -68,29 +109,29 @@ export class VoiceDomainEventBus {
   private readonly listeners: {
     [K in VoiceDomainEventType]: Set<VoiceDomainEventListener<K>>
   } = {
-      'command.toggle_handsfree': new Set(),
-      'command.stop_recording': new Set(),
-      'command.update_agent_state': new Set(),
-      'command.add_recent_message': new Set(),
-      'command.set_agent_session_id': new Set(),
-      'command.destroy': new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.command.stopRecording]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.command.updateAgentState]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.command.addRecentMessage]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.command.destroy]: new Set(),
 
-      'handsfree.enabled': new Set(),
-      'handsfree.disabled': new Set(),
-      'handsfree.failed': new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.handsfree.failed]: new Set(),
 
-      'session.started': new Set(),
-      'session.volume': new Set(),
-      'session.transcript': new Set(),
-      'session.metadata': new Set(),
-      'session.complete': new Set(),
-      'session.error': new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.session.started]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.session.volume]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.session.transcript]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.session.metadata]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.session.complete]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.session.error]: new Set(),
 
-      'decision.feedback': new Set(),
-      'decision.execute': new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.decision.feedback]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.decision.execute]: new Set(),
 
-      'action.send_voice_text': new Set(),
-      'action.handle_immediate_instruction': new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.action.handleImmediateInstruction]: new Set(),
     }
 
   /**

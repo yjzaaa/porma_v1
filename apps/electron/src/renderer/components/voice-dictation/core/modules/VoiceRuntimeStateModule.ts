@@ -5,8 +5,9 @@
 import type { VoiceDictationSettings } from '@/types/settings'
 import type { UIStateListener } from '../../types/panel'
 import type { IntelligentDecision } from '../../types/intelligence'
-import type { VoiceEventLogger } from '../../events'
+import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 import { VoiceState, VoiceStateMachine } from '../state/VoiceStateMachine'
 import { StateTransitionQueue } from '../state/StateTransitionQueue'
 import type { StateTransitionContext } from '../state/VoiceStateMachine'
@@ -37,26 +38,26 @@ export class VoiceRuntimeStateModule {
     private readonly logger: VoiceEventLogger,
   ) {
     this.unsubs.push(
-      this.bus.on('command.toggle_handsfree', ({ settings }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
         this.settings = settings
       }),
-      this.bus.on('command.set_agent_session_id', ({ sessionId }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId, ({ sessionId }) => {
         this.currentAgentSessionId = sessionId
       }),
-      this.bus.on('handsfree.enabled', ({ settings }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, ({ settings }) => {
         this.settings = settings
         this.stateMachine.transition(VoiceState.LISTENING, this.createTransitionContext('开启免提模式'))
       }),
-      this.bus.on('handsfree.disabled', () => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled, () => {
         this.stateMachine.transition(VoiceState.STOPPED, this.createTransitionContext('关闭免提模式'))
       }),
-      this.bus.on('handsfree.failed', ({ message }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.failed, ({ message }) => {
         this.stateMachine.transition(
           VoiceState.STOPPED,
           this.createTransitionContext('麦克风不可用', { message }),
         )
       }),
-      this.bus.on('session.started', () => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.started, () => {
         this.transcript = ''
         this.message = '正在监听...'
         this.stateMachine.transition(
@@ -67,22 +68,22 @@ export class VoiceRuntimeStateModule {
           }),
         )
       }),
-      this.bus.on('session.volume', ({ peak }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.volume, ({ peak }) => {
         this.volume = peak
       }),
-      this.bus.on('session.transcript', ({ text }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.transcript, ({ text }) => {
         this.transcript = text
       }),
-      this.bus.on('session.metadata', ({ message }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.metadata, ({ message }) => {
         this.message = message
         this.stateMachine.transition(
           this.stateMachine.getCurrentState(),
           this.createTransitionContext('元数据更新', { message }),
         )
       }),
-      this.bus.on('session.complete', ({ text, commitMessage }) => this.handleSessionComplete(text, commitMessage)),
-      this.bus.on('session.error', ({ message }) => this.handleSessionError(message)),
-      this.bus.on('decision.feedback', ({ reasoning, strategy }) =>
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.complete, ({ text, commitMessage }) => this.handleSessionComplete(text, commitMessage)),
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.session.error, ({ message }) => this.handleSessionError(message)),
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.decision.feedback, ({ reasoning, strategy }) =>
         this.applyDecisionFeedback(reasoning, strategy),
       ),
     )

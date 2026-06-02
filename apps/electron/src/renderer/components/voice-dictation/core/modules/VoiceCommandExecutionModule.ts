@@ -2,9 +2,10 @@
  * 决策动作分发模块（决策事件 -> 动作事件）
  */
 
-import type { VoiceEventLogger } from '../../events'
+import type { VoiceEventLogger } from '../../ui-events'
 import type { IntelligentDecision } from '../../types/intelligence'
 import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 
 export class VoiceCommandExecutionModule {
   /** 事件退订列表 */
@@ -15,7 +16,7 @@ export class VoiceCommandExecutionModule {
     private readonly logger: VoiceEventLogger,
   ) {
     this.unsubs.push(
-      this.bus.on('decision.execute', ({ decision, text }) => this.executeDecision(decision, text)),
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.decision.execute, ({ decision, text }) => this.executeDecision(decision, text)),
     )
   }
 
@@ -33,18 +34,18 @@ export class VoiceCommandExecutionModule {
     const handlers: Record<IntelligentDecision['sendStrategy'], () => void> = {
       interrupt: () => {
         this.logger.warn('检测到即时指令，发布动作事件', { text })
-        this.bus.emit('action.handle_immediate_instruction', {
+        this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.action.handleImmediateInstruction, {
           command: text,
           reasoning: decision.reasoning,
         })
       },
       immediate: () => {
         this.logger.info('立即发送文本到Agent，发布动作事件', { text })
-        this.bus.emit('action.send_voice_text', { text, reasoning: decision.reasoning })
+        this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText, { text, reasoning: decision.reasoning })
       },
       wait: () => {
         this.logger.info('等待发送文本，发布动作事件', { text })
-        this.bus.emit('action.send_voice_text', {
+        this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText, {
           text,
           reasoning: 'Agent忙碌，但仍尝试发送',
         })

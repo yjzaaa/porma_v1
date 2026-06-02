@@ -28,7 +28,14 @@ import type { PcmFrame, PcmSubscriber } from '../../types/panel'
 import type { ASRProvider } from '../../types/asr'
 import type { VoiceDictationSettings } from '../../../../../types'
 import type { VADDetector } from './VADDetector'
-import { SessionEventBus } from './SessionEventBus'
+import { SessionEventBus } from '../bus/SessionEventBus'
+import {
+  SESSION_EVENT_COMPLETE,
+  SESSION_EVENT_ERROR,
+  SESSION_EVENT_METADATA,
+  SESSION_EVENT_TRANSCRIPT,
+  SESSION_EVENT_VOLUME,
+} from '../bus/SessionEventKeys'
 
 export class Session {
   /** ASR Provider 引用 */
@@ -80,7 +87,7 @@ export class Session {
     // 订阅 PCM 帧 → 实时音量 + VAD 静音检测
     this.subs.push(this.subscribe((frame: PcmFrame) => {
       if (this._disposed) return
-      this.events.emit('volume', frame.peak)
+      this.events.emit(SESSION_EVENT_VOLUME, frame.peak)
 
       const now = performance.now()
       // isSpeaking 由 VADDetector 基于自适应阈值判断（含挂尾保护）
@@ -107,22 +114,22 @@ export class Session {
         onTranscript: (text: string, isFinal: boolean) => {
           if (this._disposed) return
           this.transcript = text
-          this.events.emit('transcript', { text, isFinal })
+          this.events.emit(SESSION_EVENT_TRANSCRIPT, { text, isFinal })
         },
         onState: (_s: string, msg?: string) => {
-          if (msg) this.events.emit('metadata', msg)
+          if (msg) this.events.emit(SESSION_EVENT_METADATA, msg)
         },
-        onVolume: (p: number) => this.events.emit('volume', p),
+        onVolume: (p: number) => this.events.emit(SESSION_EVENT_VOLUME, p),
         onEnd: (text: string) => {
           // Provider 端主动结束时（如 WebSpeech 自动断连）直接完成
           if (text && !this._disposed) this.completeRecording()
         },
         onError: (msg: string) => {
-          if (!this._disposed) this.events.emit('error', msg)
+          if (!this._disposed)           this.events.emit(SESSION_EVENT_ERROR, msg)
         },
       })
     } catch {
-      if (!this._disposed) this.events.emit('error', 'ASR 引擎启动失败')
+      if (!this._disposed) this.events.emit(SESSION_EVENT_ERROR, 'ASR 引擎启动失败')
     }
   }
 
@@ -155,17 +162,17 @@ export class Session {
     this._completed = true
     const text = this.transcript.trim()
     if (!text) {
-      this.events.emit('complete', { text: '', commitMessage: '' })
+      this.events.emit(SESSION_EVENT_COMPLETE, { text: '', commitMessage: '' })
       return
     }
 
     // 通过 IPC 将转写文本输出到当前活跃的输入框
     window.electronAPI.commitVoiceDictation({ text }).then(r => {
       this.commitMessage = r.message
-      this.events.emit('complete', { text, commitMessage: r.message })
+      this.events.emit(SESSION_EVENT_COMPLETE, { text, commitMessage: r.message })
     }).catch(err => {
       console.error('[Session] commit 失败:', err)
-      this.events.emit('error', '输出失败')
+      this.events.emit(SESSION_EVENT_ERROR, '输出失败')
     })
   }
 

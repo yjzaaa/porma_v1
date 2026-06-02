@@ -14,7 +14,7 @@ import {
   VoiceLogEventEmitter,
   VoiceLogEventSubscriber,
   type VoiceLogEventListener,
-} from '../../events'
+} from '../../ui-events'
 
 export class UnifiedIntelligenceDetector {
   private readonly eventEmitter = new VoiceLogEventEmitter()

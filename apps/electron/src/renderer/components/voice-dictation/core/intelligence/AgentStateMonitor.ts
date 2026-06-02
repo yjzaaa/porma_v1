@@ -5,7 +5,7 @@ import {
   VoiceLogEventEmitter,
   VoiceLogEventSubscriber,
   type VoiceLogEventListener,
-} from '../../events'
+} from '../../ui-events'
 
 /**
  * Agent状态监听器

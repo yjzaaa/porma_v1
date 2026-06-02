@@ -2,15 +2,23 @@
  * 语音采集模块（AudioHub + VAD + Session）
  */
 
-import type { VoiceEventLogger } from '../../events'
+import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDictationSettings } from '@/types/settings'
 import type { ASRProvider } from '../../types/asr'
 import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 import type { PcmFrame } from '../../types/panel'
 import { createASRProvider } from '../../asr/factory'
 import { AudioHub } from '../runtime/AudioHub'
 import { Session } from '../runtime/Session'
 import { VADDetector } from '../runtime/VADDetector'
+import {
+  SESSION_EVENT_COMPLETE,
+  SESSION_EVENT_ERROR,
+  SESSION_EVENT_METADATA,
+  SESSION_EVENT_TRANSCRIPT,
+  SESSION_EVENT_VOLUME,
+} from '../bus/SessionEventKeys'
 
 export class VoiceCaptureModule {
   /** 统一麦克风采集中心 */
@@ -34,7 +42,7 @@ export class VoiceCaptureModule {
     private readonly logger: VoiceEventLogger,
   ) {
     this.unsubs.push(
-      this.bus.on('command.toggle_handsfree', ({ settings }) => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
         this.settings = settings
         if (settings.handsfreeEnabled && settings.enabled) {
           this.enableHandsfree().catch(() => {})
@@ -42,10 +50,10 @@ export class VoiceCaptureModule {
         }
         this.disableHandsfree()
       }),
-      this.bus.on('command.stop_recording', () => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.stopRecording, () => {
         this.stopRecording().catch(() => {})
       }),
-      this.bus.on('command.destroy', () => {
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.destroy, () => {
         this.disableHandsfree()
       }),
     )
@@ -101,12 +109,12 @@ export class VoiceCaptureModule {
       await this.hub.start()
     } catch (error) {
       this.logger.error('麦克风启动失败', { error })
-      this.bus.emit('handsfree.failed', { message: '麦克风不可用', error })
+      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.failed, { message: '麦克风不可用', error })
       return
     }
 
     this.handsfreeEnabled = true
-    this.bus.emit('handsfree.enabled', { settings: this.settings! })
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, { settings: this.settings! })
 
     this.unsubVAD = this.hub.subscribe((frame: PcmFrame) => this.detectSpeech(frame))
   }
@@ -121,7 +129,7 @@ export class VoiceCaptureModule {
     this.unsubVAD = null
     this.hub.stop()
     this.vad.reset()
-    this.bus.emit('handsfree.disabled', undefined)
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled, undefined)
   }
 
   /**
@@ -169,10 +177,10 @@ export class VoiceCaptureModule {
     this.bindSessionEvents(session, provider)
 
     this.session = session
-    this.bus.emit('session.started', { engine: this.settings.engine || 'doubao' })
+    this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.started, { engine: this.settings.engine || 'doubao' })
     session.start().catch((error) => {
       this.logger.error('启动ASR失败', { error })
-      this.bus.emit('session.error', { message: 'ASR 引擎启动失败' })
+      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message: 'ASR 引擎启动失败' })
     })
   }
 
@@ -180,26 +188,26 @@ export class VoiceCaptureModule {
    * Session 事件桥接到领域总线
    */
   private bindSessionEvents(session: Session, provider: ASRProvider): void {
-    session.events.on('volume', (peak) => this.bus.emit('session.volume', { peak }))
-    session.events.on('transcript', ({ text, isFinal }) =>
-      this.bus.emit('session.transcript', { text, isFinal, provider }),
+    session.events.on(SESSION_EVENT_VOLUME, (peak) => this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.volume, { peak }))
+    session.events.on(SESSION_EVENT_TRANSCRIPT, ({ text, isFinal }) =>
+      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.transcript, { text, isFinal, provider }),
     )
-    session.events.on('metadata', (message) => this.bus.emit('session.metadata', { message }))
-    session.events.on('complete', (result) => {
+    session.events.on(SESSION_EVENT_METADATA, (message) => this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.metadata, { message }))
+    session.events.on(SESSION_EVENT_COMPLETE, (result) => {
       if (this.session !== session) {
         this.logger.debug('忽略过期会话的完成事件')
         return
       }
       this.session = null
-      this.bus.emit('session.complete', result)
+      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.complete, result)
     })
-    session.events.on('error', (message) => {
+    session.events.on(SESSION_EVENT_ERROR, (message) => {
       if (this.session !== session) {
         this.logger.debug('忽略过期会话的错误事件')
         return
       }
       this.session = null
-      this.bus.emit('session.error', { message })
+      this.bus.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message })
     })
   }
 

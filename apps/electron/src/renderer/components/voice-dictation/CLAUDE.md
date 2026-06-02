@@ -124,6 +124,7 @@ sequenceDiagram
 |---|---|
 | `core/orchestrator/Orchestrator.ts` | Facade：对外 API、模块装配、生命周期管理 |
 | `core/bus/VoiceDomainEventBus.ts` | 统一领域事件契约与发布/订阅实现 |
+| `core/bus/SessionEventBus.ts` | 单轮录音会话事件总线 |
 | `core/modules/VoiceCaptureModule.ts` | 采集/VAD/Session 链路，发布 `session.*` |
 | `core/modules/VoiceDecisionModule.ts` | 消费 `session.transcript`，发布 `decision.*` |
 | `core/modules/VoiceCommandExecutionModule.ts` | 消费 `decision.execute`，发布 `action.*` |
@@ -138,8 +139,8 @@ sequenceDiagram
 | `asr/factory.ts` | ASR Provider 工厂 |
 | `asr/doubao.ts` | 豆包 ASR Provider |
 | `asr/webspeech.ts` | WebSpeech Provider |
-| `events/voice-dictation-events.ts` | UI 侧全局事件（设置变更、自动发送请求） |
-| `events/log-events.ts` | 日志事件发射/订阅工具 |
+| `ui-events/voice-dictation-events.ts` | UI 侧全局事件（设置变更、自动发送请求） |
+| `ui-events/log-events.ts` | 日志事件发射/订阅工具 |
 
 ## 当前设计原则
 

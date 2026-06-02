@@ -5,19 +5,27 @@
  */
 
 import type { SessionResult } from '../../types/panel'
+import {
+  SESSION_EVENT_COMPLETE,
+  SESSION_EVENT_ERROR,
+  SESSION_EVENT_KEYS,
+  SESSION_EVENT_METADATA,
+  SESSION_EVENT_TRANSCRIPT,
+  SESSION_EVENT_VOLUME,
+} from './SessionEventKeys'
 
 /** Session 事件载荷映射 */
 export interface SessionEventMap {
   /** 实时音量（0-1） */
-  volume: number
+  [SESSION_EVENT_VOLUME]: number
   /** 实时转写文本 */
-  transcript: { text: string; isFinal?: boolean }
+  [SESSION_EVENT_TRANSCRIPT]: { text: string; isFinal?: boolean }
   /** 元数据消息（如连接状态） */
-  metadata: string
+  [SESSION_EVENT_METADATA]: string
   /** 会话完成结果 */
-  complete: SessionResult
+  [SESSION_EVENT_COMPLETE]: SessionResult
   /** 会话错误信息 */
-  error: string
+  [SESSION_EVENT_ERROR]: string
 }
 
 /** Session 事件名 */
@@ -31,12 +39,12 @@ export class SessionEventBus {
   private readonly listeners: {
     [K in SessionEventType]: Set<SessionEventListener<K>>
   } = {
-      volume: new Set(),
-      transcript: new Set(),
-      metadata: new Set(),
-      complete: new Set(),
-      error: new Set(),
-    }
+    [SESSION_EVENT_KEYS.volume]: new Set(),
+    [SESSION_EVENT_KEYS.transcript]: new Set(),
+    [SESSION_EVENT_KEYS.metadata]: new Set(),
+    [SESSION_EVENT_KEYS.complete]: new Set(),
+    [SESSION_EVENT_KEYS.error]: new Set(),
+  }
 
   /**
    * 订阅事件
@@ -61,11 +69,10 @@ export class SessionEventBus {
    * 清空所有监听器
    */
   clear(): void {
-    this.listeners.volume.clear()
-    this.listeners.transcript.clear()
-    this.listeners.metadata.clear()
-    this.listeners.complete.clear()
-    this.listeners.error.clear()
+    this.listeners[SESSION_EVENT_KEYS.volume].clear()
+    this.listeners[SESSION_EVENT_KEYS.transcript].clear()
+    this.listeners[SESSION_EVENT_KEYS.metadata].clear()
+    this.listeners[SESSION_EVENT_KEYS.complete].clear()
+    this.listeners[SESSION_EVENT_KEYS.error].clear()
   }
 }
-

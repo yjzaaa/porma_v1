@@ -2,8 +2,9 @@
  * 动作处理模块（动作事件 -> 具体执行）
  */
 
-import { emitVoiceAutoSendRequested, type VoiceEventLogger } from '../../events'
+import { emitVoiceAutoSendRequested, type VoiceEventLogger } from '../../ui-events'
 import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
 import { VoiceState } from '../state/VoiceStateMachine'
 import { VoiceAgentModule } from './VoiceAgentModule'
 import { VoiceCaptureModule } from './VoiceCaptureModule'
@@ -26,10 +27,10 @@ export class VoiceActionHandlerModule {
     private readonly logger: VoiceEventLogger,
   ) {
     this.unsubs.push(
-      this.bus.on('action.send_voice_text', ({ text, reasoning }) =>
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText, ({ text, reasoning }) =>
         this.handleSendVoiceText(text, reasoning),
       ),
-      this.bus.on('action.handle_immediate_instruction', ({ command, reasoning }) =>
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.action.handleImmediateInstruction, ({ command, reasoning }) =>
         this.handleImmediateInstruction(command, reasoning),
       ),
     )
@@ -182,4 +183,3 @@ export class VoiceActionHandlerModule {
     return command.includes('停止') || command.includes('停下')
   }
 }
-
