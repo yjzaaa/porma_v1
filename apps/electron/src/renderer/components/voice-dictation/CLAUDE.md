@@ -26,8 +26,8 @@ flowchart TB
     end
 
     subgraph runtime["运行时能力"]
-        audio["core/runtime/AudioHub.ts<br/>PCM 采集与帧广播"]
-        vad["core/runtime/VADDetector.ts<br/>语音活动检测"]
+        audio["core/runtime/AudioHub.ts<br/>PCM 采集与帧广播 + 5 秒前置缓冲"]
+        vad["core/runtime/VADDetector.ts<br/>更保守的语音活动检测"]
         session["core/runtime/Session.ts<br/>会话生命周期 + PCM 喂入 + Provider 事件桥接"]
         fsm["core/state/VoiceStateMachine.ts"]
         queue["core/state/StateTransitionQueue.ts"]

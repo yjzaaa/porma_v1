@@ -5,7 +5,7 @@
  *   1. 通过 getUserMedia 获取麦克风音频流（整个应用仅此一处调用）
  *   2. 使用 ScriptProcessorNode 将音频转换为 16-bit PCM 帧
  *   3. 通过发布-订阅模式广播 PCM 帧给 VAD 检测和 Session
- *   4. 维护 3 秒环形缓冲供免提模式下回取预录音频
+ *   4. 维护更长的环形缓冲供免提模式下回取预录音频
  *
  * 设计要点：
  *   - 单例模式：由 Orchestrator 持有，VAD 和 Session 共享同一音频源
@@ -31,10 +31,10 @@ export class AudioHub {
   private _running = false
 
   /**
-   * 3 秒环形缓冲（16-bit PCM @ 16000Hz）
-   * 用于免提模式：VAD 检测到语音时，可回取触发前的音频片段作为 ASR 上下文
+   *   5 秒环形缓冲（16-bit PCM @ 16000Hz）
+   * 用于免提模式：VAD 检测到语音时，可回取更长的触发前音频作为 ASR 上下文
    */
-  readonly ringBuffer = new Int16Array(16000 * 3)
+    readonly ringBuffer = new Int16Array(16000 * 5)
   /** 环形缓冲当前写入位置 */
   ringIndex = 0
 

@@ -32,8 +32,8 @@ const OUTPUT_OPTIONS = [
 const VAD_TIMEOUT_OPTIONS = [
   { value: '0', label: '禁用自动停止' },
   { value: '1000', label: '1.0 秒' },
-  { value: '1800', label: '1.8 秒（推荐）' },
-  { value: '3000', label: '3.0 秒' },
+  { value: '1800', label: '1.8 秒' },
+  { value: '3000', label: '3.0 秒（推荐）' },
   { value: '5000', label: '5.0 秒' },
 ]
 

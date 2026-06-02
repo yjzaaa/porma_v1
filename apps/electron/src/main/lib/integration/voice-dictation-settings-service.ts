@@ -18,7 +18,7 @@ const DEFAULT_VOICE_DICTATION_SETTINGS: VoiceDictationSettings = {
   endpointMode: 'async',
   outputMode: 'auto',
   customHotwords: '',
-  vadStopTimeoutMs: 1800,
+  vadStopTimeoutMs: 3000,
   vadMinRecordMs: 500,
   autoSendEnabled: true,
   handsfreeEnabled: false,

@@ -28,11 +28,11 @@ export class VADDetector {
   /** 噪声学习率（越小学习越慢） */
   private readonly alpha = 0.01
   /** 语音阈值 = noiseFloor × thresholdMultiplier */
-  private readonly thresholdMultiplier = 2.5
+  private readonly thresholdMultiplier = 2.4
   /** 确认语音所需的连续超阈值帧数 */
-  private readonly confirmFrames = 3
+  private readonly confirmFrames = 2
   /** 挂尾帧数（超过此值才宣布沉默结束） */
-  private readonly hangoverFrames = 8
+  private readonly hangoverFrames = 12
 
   /** VAD 内部状态 */
   private state: VADState = 'silence'
