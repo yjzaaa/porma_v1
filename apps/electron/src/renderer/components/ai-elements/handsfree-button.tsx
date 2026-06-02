@@ -17,7 +17,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { handsfreeStateAtom } from '@/atoms/handsfree-state-atom'
-import { emitVoiceSettingsChanged } from '@/components/voice-dictation/events'
+import { emitVoiceSettingsChanged } from '@/components/voice-dictation/ui-events'
 
 export function HandsfreeButton({
   className,

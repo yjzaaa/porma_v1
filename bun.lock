@@ -22,7 +22,7 @@
     },
     "apps/electron": {
       "name": "@proma/electron",
-      "version": "0.10.15",
+      "version": "0.10.20",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "0.3.153",
         "@anthropic-ai/sdk": "^0.93.0",
@@ -31,6 +31,7 @@
         "@xmldom/xmldom": "^0.9.10",
         "adm-zip": "^0.5.17",
         "dompurify": "^3.4.5",
+        "emoji-mart": "^5.6.0",
         "highlight.js": "^11.11.1",
         "mammoth": "^1.12.0",
         "pdfjs-dist": "^4.10.38",

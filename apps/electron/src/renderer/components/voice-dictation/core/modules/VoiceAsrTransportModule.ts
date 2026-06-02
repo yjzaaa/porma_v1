@@ -44,6 +44,7 @@ export class VoiceAsrTransportModule {
 
   private async handleRequest(request: VoiceAsrTransportRequest): Promise<void> {
     try {
+      console.debug('[DEBUG-voice-asr] request', request.type)
       switch (request.type) {
         case 'checkMicrophonePermission': {
           const result = await this.withTimeout(
@@ -110,6 +111,7 @@ export class VoiceAsrTransportModule {
         }
       }
     } catch (error) {
+      console.error('[DEBUG-voice-asr] request failed', request.type, error)
       this.bus.reject(request.id, error)
     }
   }

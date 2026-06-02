@@ -54,7 +54,7 @@ import {
   updateShortcutOverrides,
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
-import { onVoiceAutoSendRequested, onVoiceSettingsChanged } from '@/components/voice-dictation/events'
+import { onVoiceAutoSendRequested, onVoiceSettingsChanged } from '@/components/voice-dictation/ui-events'
 import { shouldAutoSend } from '@/components/voice-dictation/utils/auto-send'
 
 /**

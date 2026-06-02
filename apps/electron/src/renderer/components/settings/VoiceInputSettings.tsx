@@ -16,7 +16,7 @@ import {
   SettingsToggle,
 } from './primitives'
 import type { VoiceDictationSettings, MicPermissionResult } from '../../../types'
-import { emitVoiceSettingsChanged } from '@/components/voice-dictation/events'
+import { emitVoiceSettingsChanged } from '@/components/voice-dictation/ui-events'
 
 const ENDPOINT_OPTIONS = [
   { value: 'async', label: '双向流式优化版' },

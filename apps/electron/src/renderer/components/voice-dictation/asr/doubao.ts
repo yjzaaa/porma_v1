@@ -9,7 +9,6 @@
  *   → 豆包 ASR → 转写/状态事件 → 渲染进程
  *
  * 特性：
- *   - 权限检查（checkMicrophonePermission / requestMicrophonePermission）
  *   - 回取免提缓冲（获取 VAD 触发前的音频上下文）
  *   - PCM 实时分片（200ms 块）流式发送
  *   - 事件监听隔离（sessionId 守卫，防止跨会话串扰）
@@ -77,7 +76,7 @@ export class DoubaoProvider implements ASRProvider {
    */
   async start(): Promise<void> {
     const sid = crypto.randomUUID()
-    if (!(await this.prepareStartSession(sid))) return
+    this.prepareStartSession(sid)
     await this.startTransportSession(sid)
   }
 
@@ -262,13 +261,9 @@ export class DoubaoProvider implements ASRProvider {
   /**
    * 准备会话启动前的本地状态与监听器。
    */
-  private async prepareStartSession(sessionId: string): Promise<boolean> {
+  private prepareStartSession(sessionId: string): void {
     this.resetSessionState(sessionId)
-    if (!(await this.ensureMicrophonePermission())) {
-      return false
-    }
     this.cleanupListeners = this.registerTransportListeners()
-    return true
   }
 
   /**
@@ -285,23 +280,6 @@ export class DoubaoProvider implements ASRProvider {
     this.sessionId = sessionId
     this.currentDefinite = undefined
     this.currentUtterances = undefined
-  }
-
-  /**
-   * 检查并请求麦克风权限。
-   */
-  private async ensureMicrophonePermission(): Promise<boolean> {
-    const perm = await this.transport.request('checkMicrophonePermission', undefined)
-    if (perm.status === 'granted') return true
-    if (perm.status === 'denied') {
-      this.eventBus.emit('error', { message: '麦克风权限被阻止' })
-      return false
-    }
-
-    const req = await this.transport.request('requestMicrophonePermission', undefined)
-    if (req.status === 'granted') return true
-    this.eventBus.emit('error', { message: '需要麦克风权限' })
-    return false
   }
 
   /**
