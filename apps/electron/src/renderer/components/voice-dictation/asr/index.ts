@@ -5,6 +5,7 @@
  */
 
 export * from './factory'
+export * from './shared/completion'
 export * from '../shared/types/asr'
 export * from './providers/doubao/index.ts'
 export * from './providers/webspeech/index.ts'

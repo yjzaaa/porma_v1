@@ -20,6 +20,7 @@
 import type { ASRProvider, ASREventListener } from '../../../shared/types/asr'
 import { createASREventBus, subscribeASREvents } from '../../../shared/types/asr'
 import type { PcmFrame } from '../../../shared/types/panel'
+import { shouldPromoteWebSpeechInterimToFinal } from '../../shared/completion'
 
 /** Web Speech API 类型 shim（TS 内置类型中未完整包含） */
 interface SpeechRecognition_ {
@@ -100,8 +101,8 @@ export class WebSpeechProvider implements ASRProvider {
         }
       }
 
-      // 检测临时文本的完整性（启发式增强）
-      const interimComplete = this.checkInterimCompleteness(interim)
+      // 检测临时文本的完整性（共享启发式）
+      const interimComplete = shouldPromoteWebSpeechInterimToFinal(interim)
 
       if (final || interim) {
         const enhancedResult = this.finalText + interim
@@ -154,42 +155,6 @@ export class WebSpeechProvider implements ASRProvider {
     this.eventBus.clear()
   }
 
-  /**
-   * 检查临时文本的完整性（启发式增强）
-   *
-   * WebSpeech相比豆包ASR能力基础，通过启发式规则增强完整性判断：
-   * - 句末标点检测：。！？.!?
-   * - 长度检测：超过20字符且无逗号判定为完整
-   * - 问句和感叹句检测：？?！!
-   */
-  private checkInterimCompleteness(interim: string): boolean {
-    const trimmed = interim.trim()
-
-    if (!trimmed) {
-      return false
-    }
-
-    // 句末标点检测
-    if (/[。！？.!?]$/.test(trimmed)) {
-      return true
-    }
-
-    // 长度检测
-    if (trimmed.length > 20 && !/[,，]$/.test(trimmed)) {
-      return true
-    }
-
-    // 问句检测
-    if (/[？?]$/.test(trimmed)) {
-      return true
-    }
-
-    // 感叹号检测
-    if (/[！!]$/.test(trimmed)) {
-      return true
-    }
-    return false
-  }
 }
 
 /**

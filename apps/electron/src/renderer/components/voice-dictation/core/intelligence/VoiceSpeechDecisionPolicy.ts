@@ -6,7 +6,7 @@
 
 import type { IntelligentDecision, UnifiedASRResult, VoiceAgentContext } from '../../shared/types/intelligence'
 import { AgentLoopState } from '../../shared/types/intelligence'
-import { createVoiceTextSnapshot, type VoiceTextSnapshot } from '../../shared/utils/voice-text'
+import { isCompleteAsrResult } from '../../asr/shared/completion'
 
 /**
  * 语音发送决策策略
@@ -19,22 +19,7 @@ export class VoiceSpeechDecisionPolicy {
    * @returns 是否可视为完整输入
    */
   isSpeechComplete(result: UnifiedASRResult): boolean {
-    if (result.isComplete === true) {
-      return true
-    }
-
-    const snapshot = createVoiceTextSnapshot(result.text)
-
-    switch (result.asrType) {
-      case 'doubao':
-        return this.isDoubaoComplete(result, snapshot)
-
-      case 'webspeech':
-        return this.isWebSpeechComplete(result, snapshot)
-
-      default:
-        return false
-    }
+    return isCompleteAsrResult(result)
   }
 
   /**
@@ -102,47 +87,6 @@ export class VoiceSpeechDecisionPolicy {
       confidence: asrResult.confidence,
       reasoning: 'Agent忙碌，排队等待',
     }
-  }
-
-  /**
-   * 豆包 ASR 完整性判断
-   */
-  private isDoubaoComplete(
-    result: UnifiedASRResult,
-    snapshot: VoiceTextSnapshot,
-  ): boolean {
-    const definiteCount = result.metadata.utterances?.filter(u => u.definite === true).length || 0
-    const isFinalComplete = result.isFinal === true
-    const hasMinimumLength = snapshot.length >= 3
-
-    return (
-      isFinalComplete ||
-      definiteCount > 0 ||
-      (hasMinimumLength && snapshot.hasSentenceEndingPunctuation) ||
-      (snapshot.length >= 5 && snapshot.hasPauseEndingPunctuation)
-    )
-  }
-
-  /**
-   * WebSpeech 完整性判断
-   */
-  private isWebSpeechComplete(
-    result: UnifiedASRResult,
-    snapshot: VoiceTextSnapshot,
-  ): boolean {
-    if (!result.isFinal) {
-      return false
-    }
-
-    if (snapshot.hasSentenceEndingPunctuation) {
-      return true
-    }
-
-    if (snapshot.length > 20 && !snapshot.hasPauseEndingPunctuation) {
-      return true
-    }
-
-    return /[？?]$/.test(snapshot.trimmedText) || /[！!]$/.test(snapshot.trimmedText)
   }
 
   /**

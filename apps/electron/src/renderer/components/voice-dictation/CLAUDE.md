@@ -34,6 +34,10 @@ flowchart TB
             policy["VoiceSpeechDecisionPolicy.ts — 语音完整性 + 发送策略领域服务"]
         end
 
+        subgraph asr_shared["【第 7 层】asr/shared/ — ASR 共享规则"]
+            completion["completion.ts — 完整性启发式规则"]
+        end
+
         subgraph modules["【第 4 层】modules/ — 业务模块"]
             agent_mod["VoiceAgentModule.ts — Agent 状态桥接"]
             decision["VoiceDecisionModule.ts — 决策模块"]
@@ -346,6 +350,7 @@ flowchart LR
 | `core/runtime/AudioHub.ts` | 麦克风 PCM 采集单例，3 秒环形缓冲 |
 | `core/runtime/VoiceRecordingSession.ts` | 单轮录音会话领域对象：状态、收尾等待、停止/取消 |
 | `core/runtime/Session.ts` | 底层 ASR 会话桥接，内置 VAD 事件转发 |
+| `asr/shared/completion.ts` | ASR 文本完整性共享规则：WebSpeech 提升 / 统一判定 |
 | `core/intelligence/VoiceASRResultFactory.ts` | ASR 结果工厂：归一化 Provider 元数据 |
 | `core/intelligence/VoiceSendDeduplicator.ts` | 发送去重器：短时重复文本保护 |
 | `core/intelligence/VoiceSpeechDecisionPolicy.ts` | 语音决策领域服务：语音完整性判断 + 发送策略 |
