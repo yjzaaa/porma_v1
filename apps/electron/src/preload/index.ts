@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', electronAPI)
  */
 export interface ElectronAPI {
   getOpenAIBaseUrlPreset: () => Promise<string | null>
+  writeProjectLog: (logContent: string) => Promise<void>
 
   getRuntimeStatus: () => Promise<import('@proma/shared').RuntimeStatus | null>
   reinitRuntime: () => Promise<import('@proma/shared').RuntimeStatus>

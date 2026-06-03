@@ -25,6 +25,7 @@ export function getSettings(): AppSettings {
       environmentCheckSkipped: false,
       notificationsEnabled: true,
       feishuSessionMirror: { mode: 'off' },
+      openAIBaseUrlPreset: '',
     }
   }
 
@@ -38,6 +39,7 @@ export function getSettings(): AppSettings {
       environmentCheckSkipped: data.environmentCheckSkipped ?? false,
       notificationsEnabled: data.notificationsEnabled ?? true,
       feishuSessionMirror: data.feishuSessionMirror ?? { mode: 'off' },
+      openAIBaseUrlPreset: data.openAIBaseUrlPreset ?? '',
     }
   } catch (error) {
     console.error('[设置] 读取失败:', error)
@@ -47,6 +49,7 @@ export function getSettings(): AppSettings {
       environmentCheckSkipped: false,
       notificationsEnabled: true,
       feishuSessionMirror: { mode: 'off' },
+      openAIBaseUrlPreset: '',
     }
   }
 }

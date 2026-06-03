@@ -25,6 +25,13 @@ import { PROVIDER_DEFAULT_URLS } from '@proma/shared'
 import { getFetchFn } from '../network/proxy-fetch'
 import { getEffectiveProxyUrl } from '../network/proxy-settings-service'
 import { normalizeAnthropicBaseUrl, normalizeBaseUrl, normalizeVersionedAnthropicBaseUrl } from '@proma/core'
+import {
+  buildOpenAICompatiblePresetChannel,
+  hasOpenAICompatiblePresetChannel,
+  normalizeOpenAICompatibleChannel,
+  resolveOpenAICompatibleFallbackModelId,
+} from './openai-fallback'
+import { getSettings } from '../storage/settings-service'
 
 /** 当前配置版本 */
 const CONFIG_VERSION = 1
@@ -111,6 +118,7 @@ function decryptKey(encryptedKey: string): string {
  */
 export function listChannels(): Channel[] {
   const config = readConfig()
+  let changed = false
 
   // 首次使用：如果没有 DeepSeek 渠道，自动创建预设
   const hasDeepSeek = config.channels.some(
@@ -133,9 +141,28 @@ export function listChannels(): Channel[] {
       updatedAt: now,
     }
     config.channels.push(presetChannel)
-    writeConfig(config)
     console.log('[渠道管理] 已自动创建 DeepSeek 预设渠道')
-    return config.channels
+    changed = true
+  }
+
+  const openAIBaseUrlPreset = getSettings().openAIBaseUrlPreset?.trim() || process.env.OPENAI_BASE_URL?.trim()
+  if (openAIBaseUrlPreset && !hasOpenAICompatiblePresetChannel(config.channels, openAIBaseUrlPreset)) {
+    const presetChannel = buildOpenAICompatiblePresetChannel(openAIBaseUrlPreset)
+    if (presetChannel) {
+      config.channels.push(presetChannel)
+      console.log('[渠道管理] 已自动创建本地 OpenAI 兼容预设渠道')
+      changed = true
+    }
+  }
+
+  const normalizedChannels = config.channels.map((channel) => normalizeOpenAICompatibleChannel(channel))
+  if (normalizedChannels.some((channel, index) => channel !== config.channels[index])) {
+    config.channels = normalizedChannels
+    changed = true
+  }
+
+  if (changed) {
+    writeConfig(config)
   }
 
   return config.channels
@@ -531,6 +558,7 @@ export async function refreshAllChannelModels(): Promise<Channel[]> {
   // 并行拉取所有已启用渠道的模型
   const results = await Promise.allSettled(
     enabledChannels.map(async (channel) => {
+      const normalizedChannel = normalizeOpenAICompatibleChannel(channel)
       const apiKey = decryptKey(channel.apiKey)
       if (!apiKey && channel.provider !== 'openai' && channel.provider !== 'custom') return null
 
@@ -540,17 +568,24 @@ export async function refreshAllChannelModels(): Promise<Channel[]> {
         apiKey,
       })
 
-      if (!result.success || result.models.length === 0) return null
+      if (!result.success || result.models.length === 0) {
+        return normalizedChannel !== channel ? { channelId: channel.id, mergedModels: normalizedChannel.models, normalizedChannel } : null
+      }
 
-      // 合并：已有模型保留启用状态，新模型默认 enabled: false
-      const existingIds = new Set(channel.models.map((m) => m.id))
-      const newModels = result.models
-        .filter((m) => !existingIds.has(m.id))
-        .map((m) => ({ ...m, enabled: false }))
+      const modelMap = new Map<string, ChannelModel>()
+      for (const model of normalizedChannel.models) {
+        modelMap.set(model.id, model)
+      }
 
-      if (newModels.length === 0) return null
+      for (const model of result.models) {
+        const existing = modelMap.get(model.id)
+        modelMap.set(model.id, {
+          ...model,
+          enabled: existing?.enabled ?? false,
+        })
+      }
 
-      return { channelId: channel.id, mergedModels: [...channel.models, ...newModels] }
+      return { channelId: channel.id, mergedModels: Array.from(modelMap.values()), normalizedChannel }
     })
   )
 
@@ -558,10 +593,11 @@ export async function refreshAllChannelModels(): Promise<Channel[]> {
   let hasChanges = false
   for (const r of results) {
     if (r.status !== 'fulfilled' || !r.value) continue
-    const { channelId, mergedModels } = r.value
+    const { channelId, mergedModels, normalizedChannel } = r.value
     const ch = config.channels.find((c) => c.id === channelId)
     if (ch) {
       ch.models = mergedModels
+      ch.enabled = normalizedChannel.enabled
       ch.updatedAt = Date.now()
       hasChanges = true
     }
@@ -698,11 +734,11 @@ async function fetchOpenAICompatibleModels(baseUrl: string, apiKey: string, prox
     }
 
     if (chatResponse.ok || chatResponse.status === 400 || chatResponse.status === 422) {
-      const envModel = (process.env.OPENAI_MODEL ?? process.env.LLM_MODEL ?? '').trim()
+      const envModel = resolveOpenAICompatibleFallbackModelId(baseUrl)
       if (envModel) {
         return {
           success: true,
-          message: `网关不支持 /models，已使用环境变量模型: ${envModel}`,
+          message: `网关不支持 /models，已使用兜底模型: ${envModel}`,
           models: [{ id: envModel, name: envModel, enabled: true }],
         }
       }
@@ -725,6 +761,17 @@ async function fetchOpenAICompatibleModels(baseUrl: string, apiKey: string, prox
     name: item.id,
     enabled: true,
   }))
+
+  if (models.length === 0) {
+    const fallbackModelId = resolveOpenAICompatibleFallbackModelId(baseUrl)
+    if (fallbackModelId) {
+      return {
+        success: true,
+        message: `网关返回空模型列表，已使用兜底模型: ${fallbackModelId}`,
+        models: [{ id: fallbackModelId, name: fallbackModelId, enabled: true }],
+      }
+    }
+  }
 
   // 按模型 ID 字母排序，方便用户查找
   models.sort((a, b) => a.id.localeCompare(b.id))

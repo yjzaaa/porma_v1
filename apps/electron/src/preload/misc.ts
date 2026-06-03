@@ -3,7 +3,7 @@
  */
 
 import { ipcRenderer } from 'electron'
-import { QUICK_TASK_IPC_CHANNELS, TRAY_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, STORAGE_IPC_CHANNELS } from '../types'
+import { QUICK_TASK_IPC_CHANNELS, TRAY_IPC_CHANNELS, VOICE_DICTATION_IPC_CHANNELS, STORAGE_IPC_CHANNELS, PROJECT_LOG_IPC_CHANNELS } from '../types'
 import type {
   QuickTaskSubmitInput,
   QuickTaskOpenSessionData,
@@ -107,6 +107,7 @@ const api: Record<string, unknown> = {
   checkMicrophonePermission: () => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.CHECK_MIC_PERMISSION),
   requestMicrophonePermission: () => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.REQUEST_MIC_PERMISSION),
   writeVoiceDictationLog: (logContent: string) => ipcRenderer.invoke(VOICE_DICTATION_IPC_CHANNELS.WRITE_LOG, logContent),
+  writeProjectLog: (logContent: string) => ipcRenderer.invoke(PROJECT_LOG_IPC_CHANNELS.WRITE, logContent),
 
   // ===== 菜单栏 =====
   onTrayOpenAgentSession: (callback: (data: TrayOpenAgentSessionData) => void) => {

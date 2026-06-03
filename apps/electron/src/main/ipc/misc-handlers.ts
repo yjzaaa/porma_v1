@@ -44,10 +44,12 @@ import {
   getReleaseByTag,
 } from '../lib/integration/github-release-service'
 import { calculateStorageStats, cleanupStorage, cleanupTempFiles } from '../lib/storage/storage-service'
+import { getSettings } from '../lib/storage/settings-service'
 
 export function registerMiscHandlers(): void {
   ipcMain.handle('misc:get-openai-base-url-preset', async (): Promise<string | null> => {
-    const value = process.env.OPENAI_BASE_URL?.trim()
+    const settings = getSettings()
+    const value = settings.openAIBaseUrlPreset?.trim() || process.env.OPENAI_BASE_URL?.trim()
     return value && value.length > 0 ? value : null
   })
 
@@ -330,6 +332,25 @@ export function registerMiscHandlers(): void {
     async (): Promise<MicPermissionResult> => {
       const { requestMicrophonePermission } = await import('../lib/system/microphone-permission-service')
       return requestMicrophonePermission()
+    }
+  )
+
+  ipcMain.handle(
+    'misc:write-project-log',
+    async (_, logContent: string): Promise<void> => {
+      const { join } = await import('node:path')
+      const { appendFileSync, existsSync, mkdirSync } = await import('node:fs')
+      const { app } = await import('electron')
+
+      const logDir = app.isPackaged
+        ? join(app.getPath('userData'), 'logs')
+        : join(process.cwd(), 'logs')
+      if (!existsSync(logDir)) {
+        mkdirSync(logDir, { recursive: true })
+      }
+      const logFile = join(logDir, 'model-load.log')
+      const timestamp = new Date().toISOString()
+      appendFileSync(logFile, `[${timestamp}] ${logContent}\n`, 'utf-8')
     }
   )
 

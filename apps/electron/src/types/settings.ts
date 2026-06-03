@@ -197,6 +197,8 @@ export interface AppSettings {
   agentChannelIds?: string[]
   /** Agent 当前工作区 ID */
   agentWorkspaceId?: string
+  /** OpenAI-compatible 本地接口 Base URL 预设 */
+  openAIBaseUrlPreset?: string
   /** 是否已完成 Onboarding 流程 */
   onboardingCompleted?: boolean
   /** 是否跳过了环境检测 */
@@ -359,6 +361,12 @@ export const VOICE_DICTATION_IPC_CHANNELS = {
   BROADCAST_STATE_TO_MAIN: 'voice-dictation:broadcast-state-to-main',
   /** 写入语音听写日志到文件 */
   WRITE_LOG: 'voice-dictation:write-log',
+} as const
+
+/** 项目调试日志 IPC 通道 */
+export const PROJECT_LOG_IPC_CHANNELS = {
+  /** 写入项目调试日志到文件 */
+  WRITE: 'misc:write-project-log',
 } as const
 
 /** 快速任务提交输入 */
