@@ -5,23 +5,26 @@
  */
 
 import type { ASRProvider } from '../../shared/types/asr'
+import type { ASRProviderType } from '../../shared/types/asr'
 import type { UnifiedASRResult } from '../../shared/types/intelligence'
 import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
 import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
+import { VoiceASRResultFactory } from '../intelligence/VoiceASRResultFactory'
+import { VoiceSendDeduplicator } from '../intelligence/VoiceSendDeduplicator'
 import { VoiceSpeechDecisionPolicy } from '../intelligence/VoiceSpeechDecisionPolicy'
 import { VoiceAgentModule } from './VoiceAgentModule'
 import { BaseVoiceModule } from './BaseVoiceModule'
 
 export class VoiceDecisionModule extends BaseVoiceModule {
+  /** ASR 结果工厂 */
+  private readonly asrResultFactory = new VoiceASRResultFactory()
   /** 语音决策领域服务 */
   private readonly policy = new VoiceSpeechDecisionPolicy()
+  /** 发送去重器 */
+  private readonly deduplicator = new VoiceSendDeduplicator()
   /** 当前 ASR 引擎类型（用于构建统一结果） */
-  private currentEngine: 'doubao' | 'webspeech' = 'doubao'
-  /** 最近一次已发送文本（用于去重） */
-  private lastSentText = ''
-  /** 最近一次发送时间戳 */
-  private lastSentAt = 0
+  private currentEngine: ASRProviderType = 'doubao'
 
   constructor(
     bus: VoiceDomainEventBus,
@@ -76,7 +79,7 @@ export class VoiceDecisionModule extends BaseVoiceModule {
     })
 
     // === 🔧 第2步：构建ASR结果 ===
-    const asrResult = this.buildASRResult(text, isFinal, provider)
+    const asrResult = this.asrResultFactory.create(text, isFinal, this.currentEngine, provider)
 
     // === 🔍 第3步：获取Agent状态 ===
     const agentContext = this.agentModule.getCurrentContext()
@@ -106,14 +109,14 @@ export class VoiceDecisionModule extends BaseVoiceModule {
     // === 🚀 第6步：如果决定发送，发布执行命令 ===
     if (decision.shouldSend) {
       // 检查去重
-      if (this.shouldSkipDuplicate(text)) {
+      if (this.deduplicator.shouldSkip(text)) {
         this.logger.info('⏭️ 跳过重复发送', {
           text: this.formatText(text),
         })
         return
       }
 
-      this.markSent(text)
+      this.deduplicator.record(text)
 
       // 发布执行命令
       this.logger.info('🧠 DecisionModule 发出决策执行事件', {
@@ -134,7 +137,7 @@ export class VoiceDecisionModule extends BaseVoiceModule {
     const finalText = text.trim()
     if (!finalText) return
 
-    if (this.shouldSkipDuplicate(finalText)) {
+    if (this.deduplicator.shouldSkip(finalText)) {
       this.logger.info('⏭️ 跳过重复发送（会话结束兜底）', {
         text: this.formatText(finalText),
       })
@@ -143,14 +146,8 @@ export class VoiceDecisionModule extends BaseVoiceModule {
 
     this.logger.info('🔄 会话结束，触发兜底决策')
 
-    const asrResult: UnifiedASRResult = {
-      text: finalText,
-      isFinal: true,
-      confidence: 0.8,
-      isComplete: true,
-      asrType: this.currentEngine,
-      metadata: {},
-    }
+    const asrResult: UnifiedASRResult = this.asrResultFactory.create(finalText, true, this.currentEngine)
+    asrResult.isComplete = true
 
     const agentContext = this.agentModule.getCurrentContext()
     const decision = this.policy.makeDecision(asrResult, agentContext)
@@ -161,93 +158,13 @@ export class VoiceDecisionModule extends BaseVoiceModule {
         reasoning: decision.reasoning,
       })
 
-      this.markSent(finalText)
+      this.deduplicator.record(finalText)
 
       this.emit(VOICE_DOMAIN_EVENT_KEYS.decision.execute, {
         decision,
         text: finalText,
       })
     }
-  }
-
-  /**
-   * 构建统一 ASR 结果对象
-   *
-   * 说明：完整性判断统一交给领域服务，模块只负责组装输入。
-   */
-  private buildASRResult(
-    text: string,
-    isFinal: boolean | undefined,
-    provider: ASRProvider,
-  ): UnifiedASRResult {
-    const draft: UnifiedASRResult = {
-      text,
-      isFinal: isFinal || false,
-      confidence: 0.8,
-      isComplete: false,
-      asrType: this.currentEngine,
-      metadata: this.extractASRMetadata(provider),
-    }
-
-    return {
-      ...draft,
-      isComplete: this.policy.isSpeechComplete(draft),
-    }
-  }
-
-  /**
-   * 按 Provider 能力提取元信息
-   */
-  private extractASRMetadata(provider: ASRProvider): UnifiedASRResult['metadata'] {
-    const metadata: UnifiedASRResult['metadata'] = {}
-    const typedProvider = provider as {
-      getCurrentRecognitionDetails?: () => {
-        definite?: boolean
-        utterances?: Array<{ text: string; definite: boolean }>
-      }
-      getCurrentResult?: () => {
-        interimText?: string
-        resultIndex?: number
-      }
-    }
-
-    if (typedProvider.getCurrentRecognitionDetails) {
-      try {
-        const details = typedProvider.getCurrentRecognitionDetails()
-        metadata.definite = details.definite
-        metadata.utterances = details.utterances || []
-      } catch (error) {
-        this.logger.warn('获取豆包ASR详细信息失败', { error })
-      }
-    }
-
-    if (typedProvider.getCurrentResult) {
-      try {
-        const result = typedProvider.getCurrentResult()
-        metadata.interimText = result.interimText
-        metadata.resultIndex = result.resultIndex
-      } catch (error) {
-        this.logger.warn('获取WebSpeech详细信息失败', { error })
-      }
-    }
-
-    return metadata
-  }
-
-  /**
-   * 判定是否应跳过重复发送。
-   */
-  private shouldSkipDuplicate(text: string): boolean {
-    const now = Date.now()
-    return text === this.lastSentText && now - this.lastSentAt < 4000
-  }
-
-  /**
-   * 记录最近发送文本。
-   */
-  private markSent(text: string): void {
-    this.lastSentText = text
-    this.lastSentAt = Date.now()
   }
 
   /**

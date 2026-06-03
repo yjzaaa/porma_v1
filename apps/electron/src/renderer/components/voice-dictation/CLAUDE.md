@@ -29,6 +29,8 @@ flowchart TB
 
         subgraph intelligence["【第 3 层】intelligence/ — 智能决策"]
             monitor["AgentStateMonitor.ts — Agent 状态监听<br/>循环状态检测"]
+            asr_factory["VoiceASRResultFactory.ts — ASR 结果归一化"]
+            deduper["VoiceSendDeduplicator.ts — 重复发送保护"]
             policy["VoiceSpeechDecisionPolicy.ts — 语音完整性 + 发送策略领域服务"]
         end
 
@@ -342,6 +344,8 @@ flowchart LR
 | `core/runtime/AudioHub.ts` | 麦克风 PCM 采集单例，3 秒环形缓冲 |
 | `core/runtime/VoiceRecordingSession.ts` | 单轮录音会话领域对象：状态、收尾等待、停止/取消 |
 | `core/runtime/Session.ts` | 底层 ASR 会话桥接，内置 VAD 事件转发 |
+| `core/intelligence/VoiceASRResultFactory.ts` | ASR 结果工厂：归一化 Provider 元数据 |
+| `core/intelligence/VoiceSendDeduplicator.ts` | 发送去重器：短时重复文本保护 |
 | `core/intelligence/VoiceSpeechDecisionPolicy.ts` | 语音决策领域服务：语音完整性判断 + 发送策略 |
 | `core/orchestrator/Orchestrator.ts` | 外观层：创建模块、桥接事件、接收 hook 注入 IPC |
 | `core/intelligence/AgentStateMonitor.ts` | Agent 状态监听器：循环状态检测与只读快照输出 |
