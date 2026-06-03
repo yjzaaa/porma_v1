@@ -14,7 +14,7 @@ import type { VoiceDictationIpcBridge } from '../../shared/types/voice-dictation
 import type { PcmFrame } from '../../shared/types/panel'
 import { createASRProvider } from '../../asr'
 import { AudioHub } from '../runtime/AudioHub'
-import { Session } from '../runtime/Session'
+import { VoiceRecordingSession } from '../runtime/VoiceRecordingSession'
 import { VADDetector } from '../runtime/VADDetector'
 import {
   SESSION_EVENT_COMPLETE,
@@ -30,13 +30,10 @@ export class VoiceCaptureModule extends BaseVoiceModule {
   private readonly hub = new AudioHub()
   /** 语音活动检测器 */
   private readonly vad = new VADDetector()
-  /** 会话完成等待器 */
-  private readonly completionWaiters = new Map<Session, { resolve: () => void }>()
-
   /** 当前语音设置快照 */
   private settings: VoiceDictationSettings | null = null
   /** 当前活跃录音会话 */
-  private session: Session | null = null
+  private session: VoiceRecordingSession | null = null
   /** VAD 订阅取消函数 */
   private unsubVAD: (() => void) | null = null
   /** 免提开关状态 */
@@ -92,9 +89,8 @@ export class VoiceCaptureModule extends BaseVoiceModule {
   async stopRecording(): Promise<void> {
     if (!this.session) return
     const session = this.session
-    const wait = this.waitForSessionCompletion(session)
     await session.stop().catch(() => '')
-    await wait
+    await session.waitUntilSettled()
   }
 
   /**
@@ -105,7 +101,7 @@ export class VoiceCaptureModule extends BaseVoiceModule {
     const session = this.session
     this.session.cancel()
     this.session = null
-    this.resolveSessionCompletion(session)
+    session.settle()
   }
 
   /**
@@ -121,7 +117,6 @@ export class VoiceCaptureModule extends BaseVoiceModule {
   dispose(): void {
     this.disposeSubscriptions()
     this.disableHandsfree()
-    this.completionWaiters.clear()
   }
 
   /**
@@ -243,7 +238,7 @@ export class VoiceCaptureModule extends BaseVoiceModule {
 
     const provider = this.createProvider()
     this.logger.info('启动新录音会话', { engine: this.settings.engine })
-    const session = new Session(provider)
+    const session = new VoiceRecordingSession(provider)
     this.bindSessionEvents(session, provider)
 
     this.session = session
@@ -257,7 +252,7 @@ export class VoiceCaptureModule extends BaseVoiceModule {
   /**
    * Session 事件桥接到领域总线
    */
-  private bindSessionEvents(session: Session, provider: ASRProvider): void {
+  private bindSessionEvents(session: VoiceRecordingSession, provider: ASRProvider): void {
     session.events.on(SESSION_EVENT_VOLUME, (peak) => this.emit(VOICE_DOMAIN_EVENT_KEYS.session.volume, { peak }))
     session.events.on(SESSION_EVENT_TRANSCRIPT, ({ text, isFinal }) => {
       this.logger.debug('🎤 CaptureModule 收到转写事件', { text: text.substring(0, 20), isFinal })
@@ -270,13 +265,13 @@ export class VoiceCaptureModule extends BaseVoiceModule {
     session.events.on(SESSION_EVENT_ERROR, (message) => {
       if (this.session !== session) {
         this.logger.debug('忽略过期会话的错误事件')
-        this.resolveSessionCompletion(session)
+        session.settle()
         return
       }
       this.logger.warn('会话出错', { message })
       this.session = null
       this.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message })
-      this.resolveSessionCompletion(session)
+      session.settle()
 
       // 🔧 免提模式下，如果用户仍在说话，立即重启会话
       if (this.handsfreeEnabled && this.vad.isSpeaking) {
@@ -302,10 +297,10 @@ export class VoiceCaptureModule extends BaseVoiceModule {
   /**
    * 处理会话完成：提交文本到主进程并广播领域事件。
    */
-  private async handleSessionComplete(session: Session, text: string): Promise<void> {
+  private async handleSessionComplete(session: VoiceRecordingSession, text: string): Promise<void> {
     if (this.session !== session) {
       this.logger.debug('忽略过期会话的完成事件')
-      this.resolveSessionCompletion(session)
+      session.settle()
       return
     }
 
@@ -322,7 +317,7 @@ export class VoiceCaptureModule extends BaseVoiceModule {
         })
         this.emit(VOICE_DOMAIN_EVENT_KEYS.session.error, { message: '输出失败' })
         this.session = null
-        this.resolveSessionCompletion(session)
+        session.settle()
         return
       }
     }
@@ -332,29 +327,6 @@ export class VoiceCaptureModule extends BaseVoiceModule {
       text: trimmed,
       commitMessage,
     })
-    this.resolveSessionCompletion(session)
-  }
-
-  /**
-   * 等待指定会话完成提交。
-   */
-  private waitForSessionCompletion(session: Session): Promise<void> {
-    return new Promise((resolve) => {
-      const existing = this.completionWaiters.get(session)
-      if (existing) {
-        existing.resolve()
-      }
-      this.completionWaiters.set(session, { resolve })
-    })
-  }
-
-  /**
-   * 结束指定会话的完成等待。
-   */
-  private resolveSessionCompletion(session: Session): void {
-    const waiter = this.completionWaiters.get(session)
-    if (!waiter) return
-    this.completionWaiters.delete(session)
-    waiter.resolve()
+    session.settle()
   }
 }

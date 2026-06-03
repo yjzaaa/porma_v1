@@ -39,6 +39,12 @@ export enum AgentLoopState {
   UNKNOWN = 'unknown'
 }
 
+/** 语音自动发送模式 */
+export type AutoSendMode = 'always' | 'smart' | 'ai'
+
+/** 语音发送策略 */
+export type VoiceSendStrategy = 'immediate' | 'wait' | 'interrupt' | 'continue'
+
 /** Agent 上下文信息 */
 export interface AgentContext {
   mode: 'agent' | 'chat'
@@ -53,7 +59,7 @@ export interface AgentContext {
 /** 智能决策结果 */
 export interface IntelligentDecision {
   shouldSend: boolean
-  sendStrategy: 'immediate' | 'wait' | 'interrupt' | 'continue'
+  sendStrategy: VoiceSendStrategy
   confidence: number
   reasoning: string
 }

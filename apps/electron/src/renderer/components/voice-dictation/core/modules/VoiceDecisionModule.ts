@@ -9,13 +9,13 @@ import type { UnifiedASRResult } from '../../shared/types/intelligence'
 import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
 import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
-import { UnifiedIntelligenceDetector } from '../intelligence/UnifiedIntelligenceDetector'
+import { VoiceSpeechDecisionPolicy } from '../intelligence/VoiceSpeechDecisionPolicy'
 import { VoiceAgentModule } from './VoiceAgentModule'
 import { BaseVoiceModule } from './BaseVoiceModule'
 
 export class VoiceDecisionModule extends BaseVoiceModule {
-  /** 智能检测器（语音完整性 + 发送策略） */
-  private readonly detector = new UnifiedIntelligenceDetector()
+  /** 语音决策领域服务 */
+  private readonly policy = new VoiceSpeechDecisionPolicy()
   /** 当前 ASR 引擎类型（用于构建统一结果） */
   private currentEngine: 'doubao' | 'webspeech' = 'doubao'
   /** 最近一次已发送文本（用于去重） */
@@ -51,7 +51,6 @@ export class VoiceDecisionModule extends BaseVoiceModule {
    */
   dispose(): void {
     this.disposeSubscriptions()
-    this.detector.dispose()
   }
 
   /**
@@ -89,7 +88,7 @@ export class VoiceDecisionModule extends BaseVoiceModule {
     })
 
     // === 🧠 第4步：智能决策 ===
-    const decision = this.detector.makeIntelligentDecision(asrResult, agentContext)
+    const decision = this.policy.makeDecision(asrResult, agentContext)
 
     this.logger.info('🎯 决策结果', {
       shouldSend: decision.shouldSend,
@@ -154,7 +153,7 @@ export class VoiceDecisionModule extends BaseVoiceModule {
     }
 
     const agentContext = this.agentModule.getCurrentContext()
-    const decision = this.detector.makeIntelligentDecision(asrResult, agentContext)
+    const decision = this.policy.makeDecision(asrResult, agentContext)
 
     if (decision.shouldSend) {
       this.logger.info('✅ 兜底决策通过', {
@@ -174,42 +173,33 @@ export class VoiceDecisionModule extends BaseVoiceModule {
   /**
    * 构建统一 ASR 结果对象
    *
-   * 优化：尝试预计算 isComplete 字段，避免每次都重新判断
+   * 说明：完整性判断统一交给领域服务，模块只负责组装输入。
    */
   private buildASRResult(
     text: string,
     isFinal: boolean | undefined,
     provider: ASRProvider,
   ): UnifiedASRResult {
-    // 🔧 尝试预计算完整性（如果 isFinal 为 true，通常表示完整）
-    let isComplete = false
-    if (isFinal === true) {
-      isComplete = true
-    } else {
-      // 对于非 final 结果，也可以做启发式判断
-      const trimmed = text.trim()
-      const hasEndingPunctuation = /[。！？.!?]$/.test(trimmed)
-      const hasMinimumLength = trimmed.length >= 5
-      if (hasEndingPunctuation && hasMinimumLength) {
-        isComplete = true
-      }
-    }
-
-    return {
+    const draft: UnifiedASRResult = {
       text,
       isFinal: isFinal || false,
       confidence: 0.8,
-      isComplete,  // 🔧 使用预计算的值
+      isComplete: false,
       asrType: this.currentEngine,
       metadata: this.extractASRMetadata(provider),
+    }
+
+    return {
+      ...draft,
+      isComplete: this.policy.isSpeechComplete(draft),
     }
   }
 
   /**
    * 按 Provider 能力提取元信息
    */
-  private extractASRMetadata(provider: ASRProvider): Record<string, unknown> {
-    const metadata: Record<string, unknown> = {}
+  private extractASRMetadata(provider: ASRProvider): UnifiedASRResult['metadata'] {
+    const metadata: UnifiedASRResult['metadata'] = {}
     const typedProvider = provider as {
       getCurrentRecognitionDetails?: () => {
         definite?: boolean

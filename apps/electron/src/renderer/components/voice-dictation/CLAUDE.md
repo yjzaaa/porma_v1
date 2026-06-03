@@ -6,17 +6,16 @@
 
 ```mermaid
 flowchart TB
-    subgraph types["【第 1 层】types/ — 类型定义层"]
-        asr_t["asr.ts — ASRProvider 接口 + ASRCallbacks"]
-        panel_t["panel.ts — 状态机类型 / PCM 帧 / Session / UIState"]
-        intel_t["intelligence.ts — AgentContext<br/>AgentLoopState / Decision"]
-        idx_t["index.ts — 类型重导出"]
+    subgraph shared["【共享层】shared/ — 契约与基础设施"]
+        shared_bus["bus/ — 领域事件总线<br/>VoiceDomainEventBus / VoiceAsrTransportBus"]
+        shared_types["types/ — 共享契约<br/>asr / panel / intelligence / ipc"]
+        shared_utils["utils/ — 纯工具<br/>voice-text / pcm / auto-send"]
     end
 
     subgraph asr["【第 7 层】asr/ — ASR Provider 实现层"]
         factory["factory.ts — 工厂模式创建 Provider"]
-        webspeech["webspeech.ts — Web Speech API<br/>浏览器内置识别"]
-        doubao["doubao.ts — 豆包 ASR<br/>IPC 通信 + 主进程链路"]
+        webspeech["providers/webspeech/index.ts — Web Speech API<br/>浏览器内置识别"]
+        doubao["providers/doubao/ — 豆包 ASR Facade<br/>audio / transport / context"]
     end
 
     subgraph core["core/ — 核心逻辑层"]
@@ -24,12 +23,13 @@ flowchart TB
             sm["StateMachine.ts — 6 状态 FSM<br/>合法转换守卫"]
             hub["AudioHub.ts — 麦克风 PCM 采集<br/>单例 + 3 秒环形缓冲"]
             vad["VADDetector.ts — 语音活动检测"]
-            sess["Session.ts — 单轮录音会话<br/>VAD 静音检测 + ASR 生命周期"]
+            sess["VoiceRecordingSession.ts — 单轮录音会话领域对象<br/>生命周期 / 收尾等待"]
+            asr_session["Session.ts — 底层 ASR 会话桥接<br/>VAD 静音检测 + Provider 事件转发"]
         end
 
         subgraph intelligence["【第 3 层】intelligence/ — 智能决策"]
             monitor["AgentStateMonitor.ts — Agent 状态监听<br/>循环状态检测"]
-            detector["UnifiedIntelligenceDetector.ts — 语音完整性 + 发送策略"]
+            policy["VoiceSpeechDecisionPolicy.ts — 语音完整性 + 发送策略领域服务"]
         end
 
         subgraph modules["【第 4 层】modules/ — 业务模块"]
@@ -37,22 +37,17 @@ flowchart TB
             decision["VoiceDecisionModule.ts — 决策模块"]
             command["VoiceCommandExecutionModule.ts — 命令执行分发"]
             action["VoiceActionHandlerModule.ts — 动作处理"]
-            capture["VoiceCaptureModule.ts — 语音采集（注入 transportBus）"]
-            state["VoiceRuntimeStateModule.ts — 运行时状态"]
+            capture["VoiceCaptureModule.ts — 语音采集（事件驱动）"]
+            state["VoiceRuntimeStateModule.ts — 运行时投影"]
         end
 
         subgraph orchestrator["【第 5 层】orchestrator/ — 编排层"]
-            orch_facade["Orchestrator.ts — 外观层<br/>创建模块 / 发布命令"]
-        end
-
-        subgraph bus["【第 6 层】bus/ — 事件总线"]
-            domain_bus["VoiceDomainEventBus.ts — 领域事件总线"]
-            asr_bus["VoiceAsrTransportBus.ts — ASR 传输总线"]
+            orch_facade["Orchestrator.ts — 外观层<br/>创建模块 / 订阅桥接"]
         end
     end
 
     subgraph hooks["【第 4 层】hooks/ — 业务层（React Hook）"]
-        hook["useVoiceOrchestrator.ts<br/>创建 transportBus + 处理 ASR 对外交互<br/>状态桥接 + 生命周期管理"]
+        hook["useVoiceOrchestrator.ts<br/>唯一 IPC 交互层<br/>桥接 Jotai + 注入回调 + 生命周期管理"]
     end
 
     subgraph ui["【表示层】ui/ — 表示层"]
@@ -60,29 +55,23 @@ flowchart TB
     end
 
     hooks -->|"创建并注入"| orch_facade
-    hooks -->|"创建并管理"| asr_bus
     hooks -->|"订阅"| JotaiAtoms["Jotai Agent Atoms"]
     hooks -->|"处理IPC"| MainProcess["Electron 主进程"]
     ui -->|"使用"| hook
 
-    subgraph utils["utils/ — 工具函数"]
-        auto["auto-send.ts — 自动发送策略"]
-        pcm["pcm.ts — PCM 采样率转换 / 分片"]
-    end
-
     %% 外部依赖
     Jotai["Jotai Agent Atoms"]
     hub -->|"getUserMedia"| Browser["浏览器 Media API"]
-    doubao -->|"使用 asr_bus"| asr_bus
-    asr_bus -->|"IPC"| MainProcess
+    doubao -->|"使用 shared/bus"| shared_bus
+    shared_bus -->|"IPC"| MainProcess
     webspeech -->|"SpeechRecognition"| Browser
 
     %% 依赖关系
-    core --> types
-    asr --> types
-    asr --> utils
-    sess --> asr
-    sess --> utils
+    core --> shared
+    asr --> shared
+    sess --> asr_session
+    asr_session --> asr
+    sess --> shared_utils
     sess --> hub
     decision --> intelligence
     decision --> agent_mod
@@ -94,12 +83,12 @@ flowchart TB
     agent_mod --> intelligence
     state --> sm
     orch_facade --> modules
-    orch_facade --> asr_bus
-    capture --> asr_bus
+    orch_facade --> shared_bus
+    capture --> shared_bus
     panel --> hook
     hook --> orch_facade
-    panel --> types
-    panel --> utils
+    panel --> shared_types
+    panel --> shared_utils
 ```
 
 ## 数据流向图
@@ -107,16 +96,16 @@ flowchart TB
 ```mermaid
 flowchart LR
     mic["🎤 麦克风"] -->|"getUserMedia<br/>Float32"| hub["AudioHub<br/>ScriptProcessor → PCM 帧"]
-    hub -->|"PCM 帧广播<br/>subscribers"| session["Session<br/>VAD 检测 + ASR 推送"]
-    hub -->|"PCM 帧"| vad["Orchestrator.detectSpeech<br/>免提语音活动检测"]
-
-    session -->|"onTranscript"| orch["Orchestrator<br/>UIState 聚合"]
-    vad -->|"能量阈值触发"| orch
-    orch -->|"broadcast"| ui["VoiceFloatingPanel<br/>React setState"]
-
-    session -->|"stop/complete"| commit["commitVoiceDictation IPC<br/>主进程输出处理"]
-    commit -->|"result.message"| orch
-    orch -->|"onAutoSend"| send["window.electronAPI<br/>sendAgentMessage"]
+    hub -->|"PCM 帧广播"| session["VoiceRecordingSession<br/>单轮录音会话领域对象"]
+    session -->|"session.*"| runtime["VoiceRuntimeStateModule<br/>单一 projection"]
+    session -->|"decision.*"| decision["VoiceDecisionModule<br/>ASR → 决策"]
+    decision -->|"action.*"| action["VoiceActionHandlerModule<br/>发送/取消/停止"]
+    action -->|"command.*"| capture["VoiceCaptureModule<br/>录音会话管理"]
+    action -->|"command.stop_agent"| orch["Orchestrator<br/>IPC 桥接 + 模块装配"]
+    orch -->|"ipcBridge"| hook["useVoiceOrchestrator<br/>唯一 IPC 交互层"]
+    hook -->|"window.electronAPI"| commit["Main Process"]
+    runtime -->|"UIState"| ui["VoiceFloatingPanel<br/>React setState"]
+    runtime -->|"autoSendRequested"| send["ui-events → Hook"]
 ```
 
 ## Agent 状态同步
@@ -133,9 +122,9 @@ sequenceDiagram
     participant Bus as VoiceDomainEventBus
     participant AgentMod as VoiceAgentModule
     participant Monitor as AgentStateMonitor
-    participant Detector as UnifiedIntelligenceDetector
+    participant Policy as VoiceSpeechDecisionPolicy
 
-    Note over Jotai,Detector: Agent 状态同步到语音决策模块
+    Note over Jotai,Policy: Agent 状态同步到语音决策模块
 
     Jotai->>Hook: agentStreamingStatesAtom 变化
     Jotai->>Hook: currentAgentSessionIdAtom 变化
@@ -152,12 +141,35 @@ sequenceDiagram
     Monitor->>Monitor: 更新 currentState
     Note over Monitor: streamingState.running<br/>streamingState.toolActivities<br/>hasError
 
-    Detector->>Monitor: getCurrentContext()
-    Monitor->>Detector: 返回 AgentContext
-    Note over Detector: loopState: PRE_USER_INPUT<br/>canAcceptInput: true
+    Policy->>Monitor: getCurrentContext()
+    Monitor->>Policy: 返回 AgentContext
+    Note over Policy: loopState: PRE_USER_INPUT<br/>canAcceptInput: true
 
-    Detector->>Detector: makeIntelligentDecision()
-    Note over Detector: 判断是否发送语音
+    Policy->>Policy: makeDecision()
+    Note over Policy: 判断是否发送语音
+```
+
+### 命令执行与 IPC 桥接
+
+```mermaid
+sequenceDiagram
+    participant Action as VoiceActionHandlerModule
+    participant Bus as VoiceDomainEventBus
+    participant Capture as VoiceCaptureModule
+    participant Orch as Orchestrator
+    participant Hook as useVoiceOrchestrator
+    participant Main as Electron Main
+
+    Action->>Bus: emit(command.stopRecording)
+    Bus->>Capture: stopRecording()
+
+    Action->>Bus: emit(command.cancelRecording)
+    Bus->>Capture: cancelSession()
+
+    Action->>Bus: emit(command.stopAgent)
+    Bus->>Orch: 事件桥接
+    Orch->>Hook: ipcBridge.stopAgent(sessionId)
+    Hook->>Main: window.electronAPI.stopAgent(sessionId)
 ```
 
 ### 状态判断逻辑
@@ -282,33 +294,71 @@ sequenceDiagram
     Orch->>UI: emit(UIState)
 ```
 
+### Capture 模块时间轴
+
+```mermaid
+flowchart LR
+    Orch["Orchestrator"] -->|"emit(command.toggleHandsfree)"| Capture["VoiceCaptureModule"]
+    Capture -->|"start()"| Hub["AudioHub"]
+    Hub -->|"PCM 帧订阅建立"| VAD["VADDetector"]
+    VAD -->|"检测到语音开始"| Sess["Session"]
+    Sess -->|"start()"| ASR["ASR Provider"]
+    Capture -->|"emit(session.started)"| Runtime["VoiceRuntimeStateModule"]
+
+    Hub -->|"PCM 帧"| Capture
+    Capture -->|"process(frame)"| VAD
+    Hub -->|"pushAudio(frame)"| Sess
+    Sess -->|"pushAudio(frame)"| ASR
+    ASR -->|"onEvent(transcript / volume / metadata)"| Sess
+    Sess -->|"session.* 事件"| Capture
+    Capture -->|"投影 UI 状态"| Runtime
+
+    Sess -->|"stop()"| ASR
+    ASR -->|"最终文本"| Sess
+    Sess -->|"complete(text)"| Capture
+    Capture -->|"emit(session.complete)"| Runtime
+
+    Note["Capture 模块负责<br/>采集 → 判定 → 启动会话 → 推送结果 → 结束会话"]
+    Note -.-> Capture
+```
+
 ## 文件职责导航
 
 | 文件 | 职责 |
 |------|------|
-| `types/asr.ts` | ASR Provider 接口定义（ASRProvider / ASRCallbacks / ASRProviderType） |
-| `types/panel.ts` | 面板状态机类型（PanelState / DetectorState / VoiceUIState）、PCM 帧、Session/UI 通信接口 |
-| `types/index.ts` | 类型重导出入口 |
-| `core/StateMachine.ts` | 6 状态有限状态机，严格守卫合法转换 |
-| `core/AudioHub.ts` | 麦克风 PCM 采集单例，3 秒环形缓冲，发布-订阅模式 |
-| `core/Session.ts` | 单轮录音会话生命周期管理（start→stop→complete→dispose），内置 VAD 静音检测 |
-| `core/Orchestrator.ts` | 总调度器：AudioHub 持有、免提开关、VAD 语音活动检测、Session 创建/销毁、UIState 广播 |
-| `core/intelligence/AgentStateMonitor.ts` | Agent 状态监听器：实时监听 Agent 对话状态、精确检测循环状态、判断用户输入时机 |
-| `core/intelligence/UnifiedIntelligenceDetector.ts` | 智能决策引擎：语音完整性检测 + 自动发送策略判断 |
-| `core/modules/VoiceAgentModule.ts` | Agent 状态桥接模块：订阅领域事件，维护 Agent 会话 ID，提供 Agent 上下文 |
-| `core/modules/VoiceDecisionModule.ts` | 决策模块：ASR 结果 → 决策事件（是否发送、发送策略） |
-| `core/modules/VoiceCommandExecutionModule.ts` | 决策动作分发：根据发送策略分发到不同动作处理器 |
-| `core/modules/VoiceActionHandlerModule.ts` | 动作处理模块：执行发送文本、处理即时指令、停止 Agent |
-| `core/modules/VoiceCaptureModule.ts` | 语音采集模块：接受外部注入的 transportBus，管理麦克风采集、VAD 检测、录音会话生命周期 |
-| `core/orchestrator/Orchestrator.ts` | 外观层（Facade）：创建各模块、发布命令到事件总线、管理生命周期、接受 transportBus 注入 |
-| `core/bus/VoiceAsrTransportBus.ts` | ASR 对外交互总线：处理 Provider 与主进程间的异步请求/响应 |
-| `hooks/useVoiceOrchestrator.ts` | 业务层 Hook：创建 transportBus、处理 ASR 对外交互（IPC 请求/事件）、创建和管理 Orchestrator 生命周期、桥接 Jotai Agent Atoms |
+| `shared/bus/AbstractTypedEventBus.ts` | 通用 typed event bus 基类，统一 `on / emit / clear` 形状 |
+| `shared/bus/VoiceDomainEventBus.ts` | 语音领域总线：连接采集、决策、动作、UI 桥接命令 |
+| `shared/bus/VoiceAsrTransportBus.ts` | ASR 传输总线：Provider ↔ 主进程的请求/响应通道 |
+| `shared/bus/SessionEventBus.ts` | 会话事件总线：Session 内部事件分发 |
+| `shared/types/asr.ts` | ASR Provider 接口、事件映射、事件桥接 helper |
+| `shared/types/panel.ts` | 面板状态、PCM 帧、Session/UI 通信接口 |
+| `shared/types/intelligence.ts` | ASR 结果、AgentContext、Decision、LogContext 共享契约 |
+| `shared/types/voice-dictation-ipc.ts` | hook 层注入的 IPC 回调契约 |
+| `shared/utils/voice-text.ts` | 语音文本值对象：归一化、标点、未完成表达判断 |
+| `shared/utils/pcm.ts` | PCM 采样率转换、缓冲合并、分片 |
+| `shared/utils/auto-send.ts` | 语音文本自动发送判断（always / smart / AI） |
+| `core/state/VoiceStateMachine.ts` | 6 状态有限状态机，严格守卫合法转换 |
+| `core/state/VoiceRuntimeProjection.ts` | 运行时投影快照，统一承载 UI/上下文写入 |
+| `core/runtime/AudioHub.ts` | 麦克风 PCM 采集单例，3 秒环形缓冲 |
+| `core/runtime/VoiceRecordingSession.ts` | 单轮录音会话领域对象：状态、收尾等待、停止/取消 |
+| `core/runtime/Session.ts` | 底层 ASR 会话桥接，内置 VAD 事件转发 |
+| `core/intelligence/VoiceSpeechDecisionPolicy.ts` | 语音决策领域服务：语音完整性判断 + 发送策略 |
+| `core/orchestrator/Orchestrator.ts` | 外观层：创建模块、桥接事件、接收 hook 注入 IPC |
+| `core/intelligence/AgentStateMonitor.ts` | Agent 状态监听器：循环状态检测与上下文输出 |
+| `core/modules/VoiceAgentModule.ts` | Agent 状态桥接模块：维护 Agent 会话 ID，提供 Agent 上下文 |
+| `core/modules/VoiceDecisionModule.ts` | 决策模块：ASR 结果 → 决策事件 |
+| `core/modules/VoiceCommandExecutionModule.ts` | 决策动作分发：根据发送策略分发动作事件 |
+| `core/modules/VoiceActionHandlerModule.ts` | 动作处理模块：执行发送文本、处理即时指令、发布停止命令 |
+| `core/modules/VoiceCaptureModule.ts` | 语音采集模块：管理麦克风采集、VAD、录音会话生命周期 |
+| `hooks/useVoiceOrchestrator.ts` | 业务层 Hook：唯一 IPC 交互层，桥接 Jotai 与 Orchestrator |
 | `ui/VoiceFloatingPanel.tsx` | 纯 UI 渲染组件：通过 Hook 获取状态，只负责渲染 |
+| `asr/index.ts` | ASR 目录入口，汇总 provider 与共享类型 |
 | `asr/factory.ts` | ASR Provider 工厂函数 |
-| `asr/webspeech.ts` | Web Speech API 实现，浏览器内置语音识别（零 IPC） |
-| `asr/doubao.ts` | 豆包 ASR 实现，通过 VoiceAsrTransportBus 与主进程通信 |
-| `utils/auto-send.ts` | 语音识别文本自动发送判断（always / smart / AI 三种策略） |
-| `utils/pcm.ts` | PCM 音频工具函数：采样率转换、缓冲合并、分片 |
+| `asr/providers/webspeech/index.ts` | Web Speech API 实现，浏览器内置语音识别（零 IPC） |
+| `asr/providers/doubao/index.ts` | 豆包 ASR 门面，组合 audio / transport / context |
+| `asr/providers/doubao/audio.ts` | PCM 缓冲、分片、发送层 |
+| `asr/providers/doubao/transport.ts` | 主进程桥接层，处理 start / state / transcript |
+| `asr/providers/doubao/context.ts` | 豆包音频/传输共享上下文 |
 
 ## 核心设计原则
 
@@ -316,5 +366,6 @@ sequenceDiagram
 2. **AudioHub 单例** — 整个应用只有一个 `getUserMedia` 调用，VAD 和 Session 通过 `subscribe()` 接收 PCM 帧
 3. **FSM 严格守卫** — 每个状态转换都经过 `VALID_TRANSITIONS` 表校验，拒绝非法跳转
 4. **Hook 业务隔离** — 业务逻辑封装在 `useVoiceOrchestrator` Hook 中，UI 组件只做纯渲染
-5. **Orchestrator 中控** — 所有状态的变更和 UI 广播都经过 Orchestrator
-6. **静音检测与自动重连** — 免提模式下 VAD 检测到语音自动启动录音，完成后 2 秒自动回归 listening 状态
+5. **Orchestrator 中控** — 负责模块装配、事件桥接和生命周期管理，不直接承载业务规则
+6. **单一投影写入** — `VoiceRuntimeStateModule` 通过 `VoiceRuntimeProjection` 统一管理 UI/上下文写入
+7. **静音检测与自动重连** — 免提模式下 VAD 检测到语音自动启动录音，完成后 2 秒自动回归 listening 状态

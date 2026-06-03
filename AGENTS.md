@@ -264,7 +264,7 @@ bun run generate:icons    # 生成应用图标
   - `strategies/`：策略路由（自动发送策略）  
   - `core/state/`：状态机（`VoiceStateMachine` + `StateTransitionQueue`）  
   - `core/runtime/`：音频与会话运行时（`AudioHub` / `VADDetector` / `Session`）  
-  - `core/intelligence/`：智能决策上下文（`AgentStateMonitor` / `UnifiedIntelligenceDetector`）  
+  - `core/intelligence/`：智能决策上下文（`AgentStateMonitor` / `VoiceSpeechDecisionPolicy`）  
   - `core/commands/`：命令模式（即时指令、发送文本命令）  
   - `core/orchestrator/Orchestrator.ts`：编排层（仅负责调度，不承载具体动作实现）
 
