@@ -109,7 +109,6 @@ export class Orchestrator {
       this.captureModule,
       this.agentModule,
       createScopedLogger('🎯 ActionModule', this.logger),
-      this.ipcBridge.stopAgent,
     )
 
     this.logger.info('🏗️ 初始化语音运行时')
@@ -119,6 +118,15 @@ export class Orchestrator {
       this.bus.on(VOICE_DOMAIN_EVENT_KEYS.ui.autoSendRequested, ({ text }) => {
         this.logger.info('📤 收到自动发送请求', { text: this.formatText(text) })
         emitVoiceAutoSendRequested({ text })
+      }),
+      this.bus.on(VOICE_DOMAIN_EVENT_KEYS.command.stopAgent, ({ sessionId }) => {
+        this.logger.info('🛑 收到停止 Agent 命令', { sessionId })
+        this.ipcBridge.stopAgent(sessionId).catch((error) => {
+          this.logger.error('打断Agent失败', {
+            error: error instanceof Error ? error.message : '未知错误',
+            sessionId,
+          })
+        })
       }),
     )
 

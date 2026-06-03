@@ -7,7 +7,6 @@
 import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
 import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
-import type { VoiceDictationIpcBridge } from '../../shared/types/voice-dictation-ipc'
 import { VoiceState } from '../state/VoiceStateMachine'
 import { VoiceAgentModule } from './VoiceAgentModule'
 import { VoiceCaptureModule } from './VoiceCaptureModule'
@@ -27,7 +26,6 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
     private readonly captureModule: VoiceCaptureModule,
     private readonly agentModule: VoiceAgentModule,
     logger: VoiceEventLogger,
-    private readonly stopAgent: VoiceDictationIpcBridge['stopAgent'],
   ) {
     super(bus, logger)
     this.on(VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText, ({ text, reasoning }) =>
@@ -86,9 +84,7 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
         )
       }
 
-      this.captureModule.stopRecording().catch(() => {
-        this.logger.warn('停止录音会话失败或已完成')
-      })
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.command.stopRecording, undefined)
     } catch (error) {
       this.logger.error('发送语音到Agent失败', {
         error: error instanceof Error ? error.message : '未知错误',
@@ -100,6 +96,7 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
     this.logger.warn('处理即时指令', { command, reasoning })
 
     if (this.isCancel(command)) {
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.command.cancelRecording, undefined)
       this.executeImmediateWithConfig(command, {
         reason: '取消操作',
         processingMessage: '正在取消...',
@@ -109,6 +106,7 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
     }
 
     if (this.isStop(command)) {
+      this.emit(VOICE_DOMAIN_EVENT_KEYS.command.stopRecording, undefined)
       this.executeImmediateWithConfig(command, {
         reason: '停止操作',
         processingMessage: '正在停止...',
@@ -117,7 +115,7 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
       return
     }
 
-    this.captureModule.cancelSession()
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.command.cancelRecording, undefined)
     this.executeImmediateWithConfig(command, {
       reason: '即时指令执行',
       processingMessage: '正在处理指令...',
@@ -147,9 +145,7 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
     )
 
     this.stateModule.setTranscriptAndMessage('', config.completedMessage)
-    this.captureModule.stopRecording().catch(() => {
-      this.logger.warn('停止录音会话失败或已完成')
-    })
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.command.stopRecording, undefined)
 
     if (this.captureModule.isHandsfreeEnabled()) {
       this.stateModule.delayedTransition(
@@ -173,12 +169,7 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
     }
 
     this.logger.info('调用stopAgent打断Agent', { sessionId, command })
-    this.stopAgent(sessionId).catch((error) => {
-      this.logger.error('打断Agent失败', {
-        error: error instanceof Error ? error.message : '未知错误',
-        sessionId,
-      })
-    })
+    this.emit(VOICE_DOMAIN_EVENT_KEYS.command.stopAgent, { sessionId })
   }
 
   private isCancel(command: string): boolean {

@@ -4,7 +4,6 @@
  * 职责：管理 UI 状态机，提供 UI 状态订阅接口
  */
 
-import type { VoiceDictationSettings } from '@/types/settings'
 import type { UIStateListener } from '../../shared/types/panel'
 import type { IntelligentDecision } from '../../shared/types/intelligence'
 import type { VoiceEventLogger } from '../../ui-events'
@@ -13,6 +12,7 @@ import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
 import { VoiceState, VoiceStateMachine } from '../state/VoiceStateMachine'
 import { StateTransitionQueue } from '../state/StateTransitionQueue'
 import type { StateTransitionContext } from '../state/VoiceStateMachine'
+import { createInitialVoiceRuntimeProjection, type VoiceRuntimeProjectionState } from '../state/VoiceRuntimeProjection'
 import { BaseVoiceModule } from './BaseVoiceModule'
 
 export class VoiceRuntimeStateModule extends BaseVoiceModule {
@@ -23,16 +23,8 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
   /** 错误恢复计时器 */
   private recoverTimer: ReturnType<typeof setTimeout> | null = null
 
-  /** 当前设置快照 */
-  private settings: VoiceDictationSettings | null = null
-  /** 当前 Agent 会话 ID */
-  private currentAgentSessionId: string | null = null
-  /** 转写文本投影 */
-  private transcript = ''
-  /** 状态消息投影 */
-  private message = ''
-  /** 音量投影 */
-  private volume = 0
+  /** 统一投影快照 */
+  private projection: VoiceRuntimeProjectionState = createInitialVoiceRuntimeProjection()
 
   constructor(
     bus: VoiceDomainEventBus,
@@ -40,13 +32,13 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
   ) {
     super(bus, logger)
     this.on(VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree, ({ settings }) => {
-      this.settings = settings
+      this.patchProjection({ settings })
     })
     this.on(VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId, ({ sessionId }) => {
-      this.currentAgentSessionId = sessionId
+      this.patchProjection({ currentAgentSessionId: sessionId })
     })
     this.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled, ({ settings }) => {
-      this.settings = settings
+      this.patchProjection({ settings })
       this.stateMachine.transition(VoiceState.LISTENING, this.createTransitionContext('开启免提模式'))
     })
     this.on(VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled, () => {
@@ -59,8 +51,7 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
       )
     })
     this.on(VOICE_DOMAIN_EVENT_KEYS.session.started, () => {
-      this.transcript = ''
-      this.message = '正在监听...'
+      this.patchProjection({ transcript: '', message: '正在监听...' })
       this.stateMachine.transition(
         VoiceState.RECORDING,
         this.createTransitionContext('启动录音会话', {
@@ -70,13 +61,13 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
       )
     })
     this.on(VOICE_DOMAIN_EVENT_KEYS.session.volume, ({ peak }) => {
-      this.volume = peak
+      this.patchProjection({ volume: peak })
     })
     this.on(VOICE_DOMAIN_EVENT_KEYS.session.transcript, ({ text }) => {
-      this.transcript = text
+      this.patchProjection({ transcript: text })
     })
     this.on(VOICE_DOMAIN_EVENT_KEYS.session.metadata, ({ message }) => {
-      this.message = message
+      this.patchProjection({ message })
       this.stateMachine.transition(
         this.stateMachine.getCurrentState(),
         this.createTransitionContext('元数据更新', { message }),
@@ -100,8 +91,7 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
    * 由命令执行模块写入文本/消息
    */
   setTranscriptAndMessage(transcript: string, message: string): void {
-    this.transcript = transcript
-    this.message = message
+    this.patchProjection({ transcript, message })
   }
 
   /**
@@ -109,11 +99,11 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
    */
   createTransitionContext(reason: string, overrides?: Partial<StateTransitionContext>): StateTransitionContext {
     return {
-      sessionId: this.currentAgentSessionId,
-      transcript: this.transcript,
-      message: this.message,
-      volume: this.volume,
-      settings: this.settings,
+      sessionId: this.projection.currentAgentSessionId,
+      transcript: this.projection.transcript,
+      message: this.projection.message,
+      volume: this.projection.volume,
+      settings: this.projection.settings,
       reason,
       ...overrides,
     }
@@ -149,7 +139,7 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
    * 是否启用免提
    */
   isHandsfreeEnabled(): boolean {
-    return this.settings?.handsfreeEnabled === true
+    return this.projection.settings?.handsfreeEnabled === true
   }
 
   /**
@@ -178,7 +168,7 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
       immediate: '正在发送...',
       wait: '等待Agent空闲...',
     }
-    this.message = feedbackByStrategy[strategy] ?? reasoning
+    this.patchProjection({ message: feedbackByStrategy[strategy] ?? reasoning })
     this.stateMachine.transition(
       this.stateMachine.getCurrentState(),
       this.createTransitionContext('智能决策结果', {
@@ -192,9 +182,9 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
    * 会话完成后的状态流转
    */
   private handleSessionComplete(text: string, commitMessage: string): void {
-    this.message = commitMessage
+    this.patchProjection({ message: commitMessage })
 
-    if (this.transcript === '' && text === '') {
+    if (this.projection.transcript === '' && text === '') {
       this.stateMachine.transition(
         VoiceState.COMPLETED,
         this.createTransitionContext('录音会话完成', {
@@ -250,5 +240,12 @@ export class VoiceRuntimeStateModule extends BaseVoiceModule {
       this.logger.info('从错误状态自动恢复')
       this.recoverTimer = null
     }, 2000)
+  }
+
+  /**
+   * 更新投影快照
+   */
+  private patchProjection(patch: Partial<VoiceRuntimeProjectionState>): void {
+    this.projection = { ...this.projection, ...patch }
   }
 }

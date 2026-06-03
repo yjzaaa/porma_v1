@@ -71,6 +71,12 @@ export class VoiceCaptureModule extends BaseVoiceModule {
       this.stopRecording().catch(() => {})
     })
 
+    // === 订阅取消录音命令 ===
+    this.on(VOICE_DOMAIN_EVENT_KEYS.command.cancelRecording, () => {
+      this.logger.info('🛑 收到取消录音命令')
+      this.cancelSession()
+    })
+
     // === 订阅销毁命令 ===
     this.on(VOICE_DOMAIN_EVENT_KEYS.command.destroy, () => {
       this.logger.info('💥 收到销毁命令')

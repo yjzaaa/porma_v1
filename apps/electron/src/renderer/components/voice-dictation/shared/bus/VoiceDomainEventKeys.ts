@@ -14,6 +14,10 @@ export const VOICE_COMMAND_TOGGLE_HANDSFREE_EVENT = 'command.toggle_handsfree' a
  */
 export const VOICE_COMMAND_STOP_RECORDING_EVENT = 'command.stop_recording' as const
 /**
+ * 取消当前录音会话的命令事件。
+ */
+export const VOICE_COMMAND_CANCEL_RECORDING_EVENT = 'command.cancel_recording' as const
+/**
  * 更新 Agent 状态快照的命令事件。
  */
 export const VOICE_COMMAND_UPDATE_AGENT_STATE_EVENT = 'command.update_agent_state' as const
@@ -29,6 +33,10 @@ export const VOICE_COMMAND_SET_AGENT_SESSION_ID_EVENT = 'command.set_agent_sessi
  * 销毁整个语音模块的命令事件。
  */
 export const VOICE_COMMAND_DESTROY_EVENT = 'command.destroy' as const
+/**
+ * 停止指定 Agent 会话的命令事件。
+ */
+export const VOICE_COMMAND_STOP_AGENT_EVENT = 'command.stop_agent' as const
 
 /**
  * 免提模式已成功启用的事件。
@@ -99,10 +107,12 @@ export const VOICE_DOMAIN_EVENT_KEYS = {
   command: {
     toggleHandsfree: VOICE_COMMAND_TOGGLE_HANDSFREE_EVENT,
     stopRecording: VOICE_COMMAND_STOP_RECORDING_EVENT,
+    cancelRecording: VOICE_COMMAND_CANCEL_RECORDING_EVENT,
     updateAgentState: VOICE_COMMAND_UPDATE_AGENT_STATE_EVENT,
     addRecentMessage: VOICE_COMMAND_ADD_RECENT_MESSAGE_EVENT,
     setAgentSessionId: VOICE_COMMAND_SET_AGENT_SESSION_ID_EVENT,
     destroy: VOICE_COMMAND_DESTROY_EVENT,
+    stopAgent: VOICE_COMMAND_STOP_AGENT_EVENT,
   },
   handsfree: {
     enabled: VOICE_HANDSFREE_ENABLED_EVENT,

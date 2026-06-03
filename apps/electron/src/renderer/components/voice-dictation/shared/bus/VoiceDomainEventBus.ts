@@ -13,8 +13,10 @@ import {
   VOICE_UI_AUTO_SEND_REQUESTED_EVENT,
   VOICE_COMMAND_ADD_RECENT_MESSAGE_EVENT,
   VOICE_COMMAND_DESTROY_EVENT,
+  VOICE_COMMAND_CANCEL_RECORDING_EVENT,
   VOICE_COMMAND_SET_AGENT_SESSION_ID_EVENT,
   VOICE_COMMAND_STOP_RECORDING_EVENT,
+  VOICE_COMMAND_STOP_AGENT_EVENT,
   VOICE_COMMAND_TOGGLE_HANDSFREE_EVENT,
   VOICE_COMMAND_UPDATE_AGENT_STATE_EVENT,
   VOICE_DECISION_EXECUTE_EVENT,
@@ -61,6 +63,8 @@ export interface VoiceDomainEventMap {
   [VOICE_COMMAND_TOGGLE_HANDSFREE_EVENT]: { settings: VoiceDictationSettings }
   /** 停止当前录音 */
   [VOICE_COMMAND_STOP_RECORDING_EVENT]: undefined
+  /** 取消当前录音会话 */
+  [VOICE_COMMAND_CANCEL_RECORDING_EVENT]: undefined
   /** 更新 Agent 状态快照 */
   [VOICE_COMMAND_UPDATE_AGENT_STATE_EVENT]: AgentStateUpdatePayload
   /** 追加最近一条消息 */
@@ -69,6 +73,8 @@ export interface VoiceDomainEventMap {
   [VOICE_COMMAND_SET_AGENT_SESSION_ID_EVENT]: { sessionId: string | null }
   /** 销毁语音模块 */
   [VOICE_COMMAND_DESTROY_EVENT]: undefined
+  /** 停止指定 Agent 会话 */
+  [VOICE_COMMAND_STOP_AGENT_EVENT]: { sessionId: string }
 
   /** 免提已启用 */
   [VOICE_HANDSFREE_ENABLED_EVENT]: { settings: VoiceDictationSettings }
@@ -124,10 +130,12 @@ export class VoiceDomainEventBus extends AbstractTypedEventBus<VoiceDomainEventM
       // 外部命令入口，通常由 Orchestrator 统一发布。
       [VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.command.stopRecording]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.command.cancelRecording]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.command.updateAgentState]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.command.addRecentMessage]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.command.destroy]: new Set(),
+      [VOICE_DOMAIN_EVENT_KEYS.command.stopAgent]: new Set(),
 
       // 免提采集链路的生命周期结果。
       [VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled]: new Set(),
