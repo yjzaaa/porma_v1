@@ -41,6 +41,7 @@ flowchart TB
             action["VoiceActionHandlerModule.ts — 动作处理"]
             capture["VoiceCaptureModule.ts — 语音采集（事件驱动）"]
             state["VoiceRuntimeStateModule.ts — 运行时投影"]
+            projection_store["VoiceRuntimeProjectionStore.ts — 投影快照存储"]
         end
 
         subgraph orchestrator["【第 5 层】orchestrator/ — 编排层"]
@@ -341,6 +342,7 @@ flowchart LR
 | `shared/utils/auto-send.ts` | 语音文本自动发送判断（always / smart / AI） |
 | `core/state/VoiceStateMachine.ts` | 6 状态有限状态机，严格守卫合法转换 |
 | `core/state/VoiceRuntimeProjection.ts` | 运行时投影快照，统一承载 UI/上下文写入 |
+| `core/state/VoiceRuntimeProjectionStore.ts` | 投影快照存储：统一更新、读取和上下文构造 |
 | `core/runtime/AudioHub.ts` | 麦克风 PCM 采集单例，3 秒环形缓冲 |
 | `core/runtime/VoiceRecordingSession.ts` | 单轮录音会话领域对象：状态、收尾等待、停止/取消 |
 | `core/runtime/Session.ts` | 底层 ASR 会话桥接，内置 VAD 事件转发 |
