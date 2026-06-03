@@ -1,4 +1,4 @@
-import type { AgentContext } from '../../shared/types/intelligence'
+import type { VoiceAgentContext } from '../../shared/types/intelligence'
 import { AgentLoopState } from '../../shared/types/intelligence'
 import {
   createVoiceEventLogger,
@@ -38,7 +38,7 @@ export class AgentStateMonitor {
     streamingState: { running: false, content: '', toolActivities: [] },
     hasError: false,
     recentMessages: [],
-    lastUserMessageTime: Date.now()
+    lastUserMessageTime: Date.now(),
   }
   
   constructor() {
@@ -52,21 +52,24 @@ export class AgentStateMonitor {
   /**
    * 获取Agent当前上下文
    */
-  getCurrentContext(): AgentContext {
-    const context = {
+  getCurrentContext(): VoiceAgentContext {
+    const loopState = this.detectLoopState()
+    const context: VoiceAgentContext = {
       mode: this.currentState.mode,
       state: this.currentState.status,
-      recentMessages: this.currentState.recentMessages,
-      activeToolCalls: this.currentState.streamingState.toolActivities,
-      loopState: this.detectLoopState(),
-      canAcceptInput: this.canAcceptInputForContext(),
-      lastUserMessageTime: this.currentState.lastUserMessageTime
+      recentMessages: [...this.currentState.recentMessages],
+      activeToolCalls: [...this.currentState.streamingState.toolActivities],
+      loopState,
+      canAcceptInput: this.canAcceptInputForContext(loopState),
+      isBusy: loopState !== AgentLoopState.PRE_USER_INPUT && loopState !== AgentLoopState.ERROR_STATE,
+      lastUserMessageTime: this.currentState.lastUserMessageTime,
     }
     
     this.logger.debug('获取Agent上下文', {
       loopState: context.loopState,
       canAcceptInput: context.canAcceptInput,
-      activeTools: context.activeToolCalls.length 
+      activeTools: context.activeToolCalls.length,
+      isBusy: context.isBusy,
     })
     
     return context
@@ -184,12 +187,12 @@ export class AgentStateMonitor {
   /**
    * 判断当前上下文是否可以接受用户输入
    */
-  private canAcceptInputForContext(): boolean {
-    const loopState = this.detectLoopState()
-    const canAccept = loopState === AgentLoopState.PRE_USER_INPUT || 
-                      loopState === AgentLoopState.ERROR_STATE
+  private canAcceptInputForContext(loopState?: AgentLoopState): boolean {
+    const resolvedLoopState = loopState ?? this.detectLoopState()
+    const canAccept = resolvedLoopState === AgentLoopState.PRE_USER_INPUT || 
+                      resolvedLoopState === AgentLoopState.ERROR_STATE
     
-    this.logger.debug('上下文输入接受判断', { canAccept, loopState })
+    this.logger.debug('上下文输入接受判断', { canAccept, loopState: resolvedLoopState })
     return canAccept
   }
   

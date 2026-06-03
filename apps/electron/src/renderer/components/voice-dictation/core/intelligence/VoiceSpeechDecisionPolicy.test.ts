@@ -1,17 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import { AgentLoopState, type AgentContext, type UnifiedASRResult } from '../../shared/types/intelligence'
+import { AgentLoopState, type UnifiedASRResult, type VoiceAgentContext } from '../../shared/types/intelligence'
 import { shouldAutoSend } from '../../shared/utils/auto-send'
 import { VoiceSpeechDecisionPolicy } from './VoiceSpeechDecisionPolicy'
 
 const policy = new VoiceSpeechDecisionPolicy()
 
-const createAgentContext = (loopState: AgentLoopState): AgentContext => ({
+const createAgentContext = (loopState: AgentLoopState): VoiceAgentContext => ({
   mode: 'agent',
   state: 'idle',
   recentMessages: [],
   activeToolCalls: [],
   loopState,
   canAcceptInput: true,
+  isBusy: loopState !== AgentLoopState.PRE_USER_INPUT && loopState !== AgentLoopState.ERROR_STATE,
   lastUserMessageTime: 0,
 })
 

@@ -4,7 +4,7 @@
  * 负责把“语音是否完整”和“当前是否适合发送”收敛为统一领域规则。
  */
 
-import type { AgentContext, IntelligentDecision, UnifiedASRResult } from '../../shared/types/intelligence'
+import type { IntelligentDecision, UnifiedASRResult, VoiceAgentContext } from '../../shared/types/intelligence'
 import { AgentLoopState } from '../../shared/types/intelligence'
 import { createVoiceTextSnapshot, type VoiceTextSnapshot } from '../../shared/utils/voice-text'
 
@@ -46,7 +46,7 @@ export class VoiceSpeechDecisionPolicy {
    */
   makeDecision(
     asrResult: UnifiedASRResult,
-    agentContext: AgentContext,
+    agentContext: VoiceAgentContext,
   ): IntelligentDecision {
     if (this.isImmediateCommand(asrResult.text)) {
       return {

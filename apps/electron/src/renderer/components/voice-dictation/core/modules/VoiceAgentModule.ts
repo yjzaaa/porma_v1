@@ -6,6 +6,7 @@
 
 import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
+import type { VoiceAgentContext } from '../../shared/types/intelligence'
 import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
 import { AgentStateMonitor } from '../intelligence/AgentStateMonitor'
 import { BaseVoiceModule } from './BaseVoiceModule'
@@ -51,7 +52,7 @@ export class VoiceAgentModule extends BaseVoiceModule {
   /**
    * 获取当前 Agent 上下文（供决策模块消费）
    */
-  getCurrentContext() {
+  getCurrentContext(): VoiceAgentContext {
     return this.monitor.getCurrentContext()
   }
 

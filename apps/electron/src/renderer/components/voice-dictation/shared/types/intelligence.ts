@@ -56,6 +56,18 @@ export interface AgentContext {
   lastUserMessageTime: number
 }
 
+/** 语音决策用的 Agent 只读快照 */
+export interface VoiceAgentContext {
+  mode: 'agent' | 'chat'
+  state: string
+  recentMessages: ReadonlyArray<string>
+  activeToolCalls: ReadonlyArray<string>
+  loopState: AgentLoopState
+  canAcceptInput: boolean
+  isBusy: boolean
+  lastUserMessageTime: number
+}
+
 /** 智能决策结果 */
 export interface IntelligentDecision {
   shouldSend: boolean

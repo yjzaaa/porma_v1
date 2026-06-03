@@ -142,8 +142,8 @@ sequenceDiagram
     Note over Monitor: streamingState.running<br/>streamingState.toolActivities<br/>hasError
 
     Policy->>Monitor: getCurrentContext()
-    Monitor->>Policy: 返回 AgentContext
-    Note over Policy: loopState: PRE_USER_INPUT<br/>canAcceptInput: true
+    Monitor->>Policy: 返回 VoiceAgentContext
+    Note over Policy: loopState: PRE_USER_INPUT<br/>canAcceptInput: true<br/>isBusy: false
 
     Policy->>Policy: makeDecision()
     Note over Policy: 判断是否发送语音
@@ -187,7 +187,7 @@ sequenceDiagram
 ### 关键设计
 
 - **解耦架构**：语音模块通过事件总线与 Agent 状态管理解耦
-- **被动更新**：`AgentStateMonitor` 被动接收更新，不主动轮询
+- **被动更新**：`AgentStateMonitor` 被动接收更新，不主动轮询，并输出 `VoiceAgentContext` 只读快照
 - **Hook 桥接**：`useVoiceOrchestrator` Hook 从 Jotai atoms 读取状态并发布事件
 - **UI 纯渲染**：`VoiceFloatingPanel` 只负责渲染，业务逻辑在 Hook 中
 - **实时响应**：Jotai atoms 变化立即触发 `syncAgentContext()` → 状态同步
@@ -332,7 +332,7 @@ flowchart LR
 | `shared/bus/SessionEventBus.ts` | 会话事件总线：Session 内部事件分发 |
 | `shared/types/asr.ts` | ASR Provider 接口、事件映射、事件桥接 helper |
 | `shared/types/panel.ts` | 面板状态、PCM 帧、Session/UI 通信接口 |
-| `shared/types/intelligence.ts` | ASR 结果、AgentContext、Decision、LogContext 共享契约 |
+| `shared/types/intelligence.ts` | ASR 结果、AgentContext、VoiceAgentContext、Decision、LogContext 共享契约 |
 | `shared/types/voice-dictation-ipc.ts` | hook 层注入的 IPC 回调契约 |
 | `shared/utils/voice-text.ts` | 语音文本值对象：归一化、标点、未完成表达判断 |
 | `shared/utils/pcm.ts` | PCM 采样率转换、缓冲合并、分片 |
@@ -344,7 +344,7 @@ flowchart LR
 | `core/runtime/Session.ts` | 底层 ASR 会话桥接，内置 VAD 事件转发 |
 | `core/intelligence/VoiceSpeechDecisionPolicy.ts` | 语音决策领域服务：语音完整性判断 + 发送策略 |
 | `core/orchestrator/Orchestrator.ts` | 外观层：创建模块、桥接事件、接收 hook 注入 IPC |
-| `core/intelligence/AgentStateMonitor.ts` | Agent 状态监听器：循环状态检测与上下文输出 |
+| `core/intelligence/AgentStateMonitor.ts` | Agent 状态监听器：循环状态检测与只读快照输出 |
 | `core/modules/VoiceAgentModule.ts` | Agent 状态桥接模块：维护 Agent 会话 ID，提供 Agent 上下文 |
 | `core/modules/VoiceDecisionModule.ts` | 决策模块：ASR 结果 → 决策事件 |
 | `core/modules/VoiceCommandExecutionModule.ts` | 决策动作分发：根据发送策略分发动作事件 |
