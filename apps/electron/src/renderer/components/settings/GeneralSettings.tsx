@@ -8,6 +8,7 @@
 import * as React from 'react'
 import { useAtom } from 'jotai'
 import { Camera, ImagePlus, Volume2 } from 'lucide-react'
+import { toast } from 'sonner'
 import Picker from '@emoji-mart/react'
 import data from '@emoji-mart/data'
 import {
@@ -43,6 +44,7 @@ import {
 } from '@/atoms/ui-preferences'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
+import { SettingsInput } from './primitives/SettingsInput'
 import type { NotificationSoundId, NotificationSoundType, NotificationSoundSettings } from '@/types/settings'
 
 /** emoji-mart 选择回调的 emoji 对象类型 */
@@ -65,12 +67,14 @@ export function GeneralSettings(): React.ReactElement {
   const [nameInput, setNameInput] = React.useState(userProfile.userName)
   const [showEmojiPicker, setShowEmojiPicker] = React.useState(false)
   const [archiveAfterDays, setArchiveAfterDays] = React.useState<number>(7)
+  const [openAIBaseUrlPreset, setOpenAIBaseUrlPreset] = React.useState('')
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   // 加载归档天数设置
   React.useEffect(() => {
     window.electronAPI.getSettings().then((settings) => {
       setArchiveAfterDays(settings.archiveAfterDays ?? 7)
+      setOpenAIBaseUrlPreset(settings.openAIBaseUrlPreset ?? '')
     }).catch(console.error)
   }, [])
 
@@ -82,6 +86,19 @@ export function GeneralSettings(): React.ReactElement {
       await window.electronAPI.updateSettings({ archiveAfterDays: days })
     } catch (error) {
       console.error('[通用设置] 更新归档天数失败:', error)
+    }
+  }
+
+  /** 保存 OpenAI Base URL 预设 */
+  const handleSaveOpenAIBaseUrlPreset = async (): Promise<void> => {
+    try {
+      await window.electronAPI.updateSettings({
+        openAIBaseUrlPreset: openAIBaseUrlPreset.trim() || undefined,
+      })
+      toast.success('OpenAI Base URL 已保存')
+    } catch (error) {
+      console.error('[通用设置] 保存 OpenAI Base URL 失败:', error)
+      toast.error('保存失败')
     }
   }
 
@@ -238,6 +255,18 @@ export function GeneralSettings(): React.ReactElement {
         description="应用的基本配置"
       >
         <SettingsCard>
+          <SettingsInput
+            label="OpenAI Base URL 预设"
+            description="用于 OpenAI / custom 渠道的本地接口，例如 http://10.83.18.24:8080/v1"
+            value={openAIBaseUrlPreset}
+            onChange={setOpenAIBaseUrlPreset}
+            placeholder="http://127.0.0.1:8000/v1"
+          />
+          <div className="px-4 pb-3">
+            <Button size="sm" variant="secondary" onClick={handleSaveOpenAIBaseUrlPreset}>
+              保存 OpenAI 预设
+            </Button>
+          </div>
           <SettingsRow
             label="语言"
             description="更多语言支持即将推出"

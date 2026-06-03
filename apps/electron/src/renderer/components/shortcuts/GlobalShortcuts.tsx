@@ -43,7 +43,7 @@ import {
   conversationDraftsAtom,
   conversationsAtom,
   currentConversationIdAtom,
-  selectedModelAtom,
+  chatDefaultModelAtom,
 } from '@/atoms/chat-atoms'
 import { activeViewAtom } from '@/atoms/active-view'
 import { useCreateSession } from '@/hooks/useCreateSession'
@@ -430,7 +430,7 @@ export function GlobalShortcuts(): null {
           })
         } else {
           // Chat 模式：创建对话 + 保存附件到磁盘
-          const chatModel = store.get(selectedModelAtom)
+          const chatModel = store.get(chatDefaultModelAtom)
           const meta = await window.electronAPI.createConversation(
             undefined,
             chatModel?.modelId,

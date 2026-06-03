@@ -7,6 +7,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { fileToBase64, formatFileNames } from '@/lib/file-utils'
+import { logProjectInfo } from '@/lib/project-log'
 import { MAX_ATTACHMENT_SIZE } from '@proma/shared'
 import { toast } from 'sonner'
 
@@ -57,6 +58,12 @@ export function QuickTaskApp(): React.ReactElement {
         window.electronAPI.getSettings(),
         window.electronAPI.listChannels(),
       ])
+      logProjectInfo('MODEL-LOAD', 'QuickTask 读取模型信息', {
+        mode,
+        agentChannelId: settings.agentChannelId ?? null,
+        agentModelId: settings.agentModelId ?? null,
+        channelCount: channels.length,
+      })
 
       if (mode === 'agent') {
         const channelId = settings.agentChannelId
@@ -71,6 +78,7 @@ export function QuickTaskApp(): React.ReactElement {
       } else {
         // Chat 模式读取 localStorage 中的 selectedModel
         const raw = localStorage.getItem('proma-selected-model')
+        logProjectInfo('MODEL-LOAD', 'QuickTask 读取 chat localStorage', { raw })
         if (raw) {
           try {
             const selected = JSON.parse(raw) as { channelId: string; modelId: string }

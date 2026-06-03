@@ -55,7 +55,7 @@ import type { TabItem } from './atoms/tab-atoms'
 import { chatToolsAtom } from './atoms/chat-tool-atoms'
 import { feishuBotStatesAtom } from './atoms/feishu-atoms'
 import { dingtalkBotStatesAtom } from './atoms/dingtalk-atoms'
-import { currentConversationIdAtom, channelsAtom, channelsLoadedAtom, selectedModelAtom } from './atoms/chat-atoms'
+import { currentConversationIdAtom, channelsAtom, channelsLoadedAtom, chatDefaultModelAtom, conversationModelsAtom } from './atoms/chat-atoms'
 import { appModeAtom } from './atoms/app-mode'
 import type { FeishuBotBridgeState, FeishuBridgeState, DingTalkBotBridgeState, DingTalkBridgeState } from '@proma/shared'
 import { Toaster } from './components/ui/sonner'
@@ -63,10 +63,15 @@ import { toast } from 'sonner'
 import { diffCapabilities } from '@proma/shared'
 import type { WorkspaceCapabilities } from '@proma/shared'
 import { showCapabilityChangeToasts } from './lib/capabilities-toast'
+import {
+  isSelectedModelAvailable,
+  resolvePreferredChatModel,
+} from './lib/model-policy'
 import { UpdateDialog } from './components/settings/UpdateDialog'
 import { GlobalShortcuts } from './components/shortcuts/GlobalShortcuts'
 import { TabSwitcher } from './components/tabs/TabSwitcher'
 import { htmlToMarkdown, markdownToHtml } from './lib/markdown-rich-text'
+import { logProjectInfo, logProjectWarn } from './lib/project-log'
 import './styles/globals.css'
 import 'katex/dist/katex.min.css'
 
@@ -171,14 +176,45 @@ function AgentSettingsInitializer(): null {
       // 缓存渠道列表
       setChannels(channels)
       setChannelsLoaded(true)
+      const rawChatModel = localStorage.getItem('proma-selected-model')
+      let parsedChatModel: { channelId: string; modelId: string } | null = null
+      if (rawChatModel) {
+        try {
+          parsedChatModel = JSON.parse(rawChatModel) as { channelId: string; modelId: string }
+        } catch (error) {
+          logProjectWarn('MODEL-LOAD', '读取本地 chat 模型失败，保留原值', error)
+        }
+      }
 
       const channelIds = new Set(channels.map((c) => c.id))
+      logProjectInfo('MODEL-LOAD', 'AgentSettings 初始化', {
+        settingsAgentChannelId: settings.agentChannelId ?? null,
+        settingsAgentModelId: settings.agentModelId ?? null,
+        settingsAgentChannelIds: settings.agentChannelIds ?? [],
+        channelIds: [...channelIds],
+      })
 
       // 验证 Chat 模式的全局默认模型（localStorage 持久化的可能指向已删除渠道）
-      const chatModel = store.get(selectedModelAtom)
-      if (chatModel && !channelIds.has(chatModel.channelId)) {
-        console.warn('[AgentSettings] Chat selectedModel 指向已删除的渠道，清除')
-        store.set(selectedModelAtom, null)
+      const chatModel = store.get(chatDefaultModelAtom)
+      const preferredChatModel = resolvePreferredChatModel(channels)
+      logProjectInfo('MODEL-LOAD', '渲染初始化完成', {
+        channelCount: channels.length,
+        storedChatModel: parsedChatModel,
+        atomChatModel: chatModel,
+        preferredChatModel,
+        agentChannelId: settings.agentChannelId ?? null,
+        agentModelId: settings.agentModelId ?? null,
+      })
+      if (!isSelectedModelAvailable(channels, chatModel)) {
+        if (preferredChatModel) {
+          store.set(chatDefaultModelAtom, preferredChatModel)
+          localStorage.setItem('proma-selected-model', JSON.stringify(preferredChatModel))
+          logProjectInfo('MODEL-LOAD', '已恢复 chat 默认模型', preferredChatModel)
+        } else {
+          console.warn('[AgentSettings] Chat selectedModel 不可用，清空')
+          store.set(chatDefaultModelAtom, null)
+          logProjectWarn('MODEL-LOAD', '已清空 chat 默认模型', chatModel)
+        }
       }
 
       // 验证并加载 Agent 渠道/模型
@@ -605,7 +641,14 @@ function TabStatePersistenceInitializer(): null {
       window.electronAPI.getSettings(),
       window.electronAPI.listConversations(),
       window.electronAPI.listAgentSessions(),
-    ]).then(([settings, conversations, agentSessions]) => {
+      window.electronAPI.listChannels(),
+    ]).then(([settings, conversations, agentSessions, channels]) => {
+      const preferredChatModel = resolvePreferredChatModel(channels)
+      if (preferredChatModel) {
+        store.set(chatDefaultModelAtom, preferredChatModel)
+        localStorage.setItem('proma-selected-model', JSON.stringify(preferredChatModel))
+      }
+
       const tabState = settings.tabState
       if (!tabState?.tabs?.length) {
         restoredRef.current = true
@@ -659,6 +702,16 @@ function TabStatePersistenceInitializer(): null {
         store.set(appModeAtom, activeTab.type)
         if (activeTab.type === 'chat') {
           store.set(currentConversationIdAtom, activeTab.sessionId)
+          if (preferredChatModel) {
+            const nextModel = preferredChatModel
+            store.set(conversationModelsAtom, (prev) => {
+              const next = new Map(prev)
+              next.set(activeTab.sessionId, nextModel)
+              return next
+            })
+            localStorage.setItem('proma-selected-model', JSON.stringify(nextModel))
+            window.electronAPI.updateConversationModel(activeTab.sessionId, nextModel.modelId, nextModel.channelId).catch(console.error)
+          }
         } else {
           store.set(currentAgentSessionIdAtom, activeTab.sessionId)
         }

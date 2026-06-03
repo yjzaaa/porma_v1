@@ -9,7 +9,7 @@ import * as React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { useConversationId, useConversationIdOptional } from '@/contexts/session-context'
 import {
-  selectedModelAtom,
+  chatDefaultModelAtom,
   contextLengthAtom,
   thinkingEnabledAtom,
   conversationModelsAtom,
@@ -59,7 +59,7 @@ function useMapSetter<T>(
 /** 每个对话独立的模型选择 */
 export function useConversationModel(): [SelectedModel | null, (m: SelectedModel | null) => void] {
   const conversationId = useConversationId()
-  const defaultModel = useAtomValue(selectedModelAtom)
+  const defaultModel = useAtomValue(chatDefaultModelAtom)
   const value = useMapValue(conversationModelsAtom, conversationId, defaultModel)
   const setter = useMapSetter(conversationModelsAtom, conversationId)
   return [value, setter]
@@ -68,7 +68,7 @@ export function useConversationModel(): [SelectedModel | null, (m: SelectedModel
 /** 可选版本：在 Provider 外返回 null（ModelSelector 双模式用） */
 export function useConversationModelOptional(): [SelectedModel | null, ((m: SelectedModel | null) => void) | null] {
   const conversationId = useConversationIdOptional()
-  const defaultModel = useAtomValue(selectedModelAtom)
+  const defaultModel = useAtomValue(chatDefaultModelAtom)
   const map = useAtomValue(conversationModelsAtom)
   const setMap = useSetAtom(conversationModelsAtom)
 

@@ -7,7 +7,7 @@
 import { useAtomValue, useSetAtom } from 'jotai'
 import {
   conversationsAtom,
-  selectedModelAtom,
+  chatDefaultModelAtom,
 } from '@/atoms/chat-atoms'
 import {
   agentSessionsAtom,
@@ -40,7 +40,7 @@ export function useCreateSession(): CreateSessionActions {
 
   // Chat
   const setConversations = useSetAtom(conversationsAtom)
-  const selectedModel = useAtomValue(selectedModelAtom)
+  const selectedModel = useAtomValue(chatDefaultModelAtom)
   const promptConfig = useAtomValue(promptConfigAtom)
   const setSelectedPromptId = useSetAtom(selectedPromptIdAtom)
 

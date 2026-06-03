@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   conversationsAtom,
-  selectedModelAtom,
+  chatDefaultModelAtom,
   channelsAtom,
   channelsLoadedAtom,
 } from '@/atoms/chat-atoms'
@@ -27,32 +27,13 @@ import { useConversationModelOptional } from '@/hooks/useConversationSettings'
 import { useConversationIdOptional } from '@/contexts/session-context'
 import { getModelLogo, getChannelLogo } from '@/lib/model-logo'
 import { cn } from '@/lib/utils'
+import { logProjectInfo } from '@/lib/project-log'
+import {
+  buildModelOptions,
+  mergeChannelsById,
+} from '@/lib/model-policy'
 import type { Channel, ModelOption } from '@proma/shared'
-
-/** 从渠道列表构建扁平化的模型选项 */
-function buildModelOptions(channels: Channel[], filterChannelId?: string, filterChannelIds?: string[]): ModelOption[] {
-  const options: ModelOption[] = []
-
-  for (const channel of channels) {
-    if (!channel.enabled) continue
-    if (filterChannelId && channel.id !== filterChannelId) continue
-    if (filterChannelIds && filterChannelIds.length > 0 && !filterChannelIds.includes(channel.id)) continue
-
-    for (const model of channel.models) {
-      if (!model.enabled) continue
-
-      options.push({
-        channelId: channel.id,
-        channelName: channel.name,
-        modelId: model.id,
-        modelName: model.name,
-        provider: channel.provider,
-      })
-    }
-  }
-
-  return options
-}
+export { buildModelOptions }
 
 /** 按渠道分组模型选项 */
 function groupByChannel(options: ModelOption[]): Map<string, ModelOption[]> {
@@ -89,7 +70,7 @@ export function ModelSelector({
   const [conversationModel, setConversationModel] = useConversationModelOptional()
   const conversationId = useConversationIdOptional()
   const setConversations = useSetAtom(conversationsAtom)
-  const setGlobalModel = useSetAtom(selectedModelAtom)
+  const setGlobalModel = useSetAtom(chatDefaultModelAtom)
   const channels = useAtomValue(channelsAtom)
   const channelsLoaded = useAtomValue(channelsLoadedAtom)
   const setChannels = useSetAtom(channelsAtom)
@@ -101,19 +82,47 @@ export function ModelSelector({
 
   // 每次打开 Dialog 时刷新渠道列表，并后台自动拉取最新模型
   React.useEffect(() => {
-    if (open) {
-      // 立即显示已有模型
-      window.electronAPI.listChannels().then(setChannels).catch(console.error)
-      setSearch('')
-      // 后台从所有已启用渠道的 Provider API 拉取最新模型
-      window.electronAPI.refreshModels().then((updated) => {
-        setChannels(updated)
-      }).catch(console.error)
+    if (!open) return
+
+    let cancelled = false
+    setSearch('')
+
+    const loadModels = async (): Promise<void> => {
+      try {
+        // 先展示当前缓存，再用刷新后的结果覆盖，避免旧的 listChannels 结果回写覆盖新模型
+        const currentChannels = await window.electronAPI.listChannels()
+        if (cancelled) return
+        setChannels(currentChannels)
+
+        const refreshedChannels = await window.electronAPI.refreshModels()
+        if (cancelled) return
+        setChannels((prev) => mergeChannelsById(prev.length > 0 ? prev : currentChannels, refreshedChannels))
+      } catch (error) {
+        console.error(error)
+      }
     }
+
+    loadModels().catch(console.error)
+    return () => { cancelled = true }
   }, [open, setChannels])
 
   const modelOptions = React.useMemo(() => buildModelOptions(channels, filterChannelId, filterChannelIds), [channels, filterChannelId, filterChannelIds])
   const grouped = React.useMemo(() => groupByChannel(modelOptions), [modelOptions])
+  React.useEffect(() => {
+    if (!open) return
+    logProjectInfo('MODEL-LOAD', 'ModelSelector 展示模型列表', {
+      filterChannelId: filterChannelId ?? null,
+      filterChannelIds: filterChannelIds ?? null,
+      channelCount: channels.length,
+      optionCount: modelOptions.length,
+      options: modelOptions.map((option) => ({
+        channelId: option.channelId,
+        channelName: option.channelName,
+        modelId: option.modelId,
+        modelName: option.modelName,
+      })),
+    })
+  }, [open, channels, modelOptions])
 
   // 搜索过滤
   const filteredGrouped = React.useMemo(() => {

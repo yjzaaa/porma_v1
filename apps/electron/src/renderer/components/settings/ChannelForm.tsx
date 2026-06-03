@@ -193,6 +193,7 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
   const [apiKeyLoaded, setApiKeyLoaded] = React.useState(false)
   const [showExitDialog, setShowExitDialog] = React.useState(false)
   const [openAIBaseUrlPreset, setOpenAIBaseUrlPreset] = React.useState<string | null>(null)
+  const lastAutoFetchKeyRef = React.useRef<string | null>(null)
 
   const setChannelFormDirty = useSetAtom(channelFormDirtyAtom)
   const setGlobalChannels = useSetAtom(channelsAtom)
@@ -422,6 +423,35 @@ export function ChannelForm({ channel, onSaved, onAgentEligibilityChange, onCanc
       setFetchingModels(false)
     }
   }
+
+  /** 本地 OpenAI 兼容地址变化时自动拉取模型 */
+  React.useEffect(() => {
+    if (!(provider === 'openai' || provider === 'custom')) {
+      lastAutoFetchKeyRef.current = null
+      return
+    }
+
+    const presetMatch =
+      openAIBaseUrlPreset &&
+      normalizeBaseUrlForPreset(baseUrl) === normalizeBaseUrlForPreset(openAIBaseUrlPreset)
+    const shouldAutoFetch = presetMatch || isLocalOpenAICompatibleBaseUrl(baseUrl)
+    if (!shouldAutoFetch || !baseUrl.trim()) {
+      lastAutoFetchKeyRef.current = null
+      return
+    }
+
+    const cacheKey = `${provider}:${normalizeBaseUrlForPreset(baseUrl)}:${normalizeBaseUrlForPreset(openAIBaseUrlPreset ?? '')}`
+    if (lastAutoFetchKeyRef.current === cacheKey) return
+    lastAutoFetchKeyRef.current = cacheKey
+
+    const timer = window.setTimeout(() => {
+      handleFetchModels().catch((error) => {
+        console.error('[模型配置表单] 自动拉取模型失败:', error)
+      })
+    }, 300)
+
+    return () => window.clearTimeout(timer)
+  }, [provider, baseUrl, openAIBaseUrlPreset, handleFetchModels])
 
   /** 测试连接（直接使用表单当前值，无需先保存） */
   const handleTest = async (): Promise<void> => {

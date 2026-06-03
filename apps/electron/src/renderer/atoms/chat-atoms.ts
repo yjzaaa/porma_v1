@@ -123,11 +123,14 @@ export const streamingToolActivitiesAtom = atom<ChatToolActivity[]>(
   },
 )
 
-/** 选中的模型（持久化到 localStorage） */
-export const selectedModelAtom = atomWithStorage<SelectedModel | null>(
+/** Chat 模式默认模型（持久化到 localStorage） */
+export const chatDefaultModelAtom = atomWithStorage<SelectedModel | null>(
   'proma-selected-model',
   null,
 )
+
+/** @deprecated 兼容旧命名，实际表示 Chat 模式默认模型 */
+export const selectedModelAtom = chatDefaultModelAtom
 
 /** 当前对话的元数据（派生原子） */
 export const currentConversationAtom = atom<ConversationMeta | null>((get) => {

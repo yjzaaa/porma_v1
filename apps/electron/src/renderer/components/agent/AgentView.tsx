@@ -53,10 +53,13 @@ import { useAgentSend } from './hooks/useAgentSend'
 import { useAgentFileAttach } from './hooks/useAgentFileAttach'
 import { useAgentStop } from './hooks/useAgentStop'
 import { useAgentRetry } from './hooks/useAgentRetry'
+import { getAgentVisibleChannels, getAgentVisibleChannelIds } from './utils/channel-selection'
 import { AgentInputView } from './views/AgentInputView'
 import { cn } from '@/lib/utils'
+import { logProjectInfo } from '@/lib/project-log'
 import { getActiveAccelerator, getAcceleratorDisplay } from '@/lib/shortcut-registry'
 import { registerShortcut } from '@/lib/shortcut-registry'
+import { isAgentCompatibleProvider } from '@proma/shared'
 
 const LONG_TEXT_ATTACHMENT_THRESHOLD = 2000
 
@@ -147,9 +150,21 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     (allAskUserRequests.get(sessionId)?.length ?? 0) > 0 ||
     (allExitPlanRequests.get(sessionId)?.length ?? 0) > 0
   const hasTextInput = sendHook.inputContent.trim().length > 0
+  const agentVisibleChannels = React.useMemo(
+    () => getAgentVisibleChannels(channels, agentChannelIds),
+    [channels, agentChannelIds],
+  )
+  const agentVisibleChannelIds = React.useMemo(
+    () => getAgentVisibleChannelIds(channels, agentChannelIds),
+    [channels, agentChannelIds],
+  )
 
   // ---- 回调 ----
   const handleModelSelect = React.useCallback((option: ModelOption): void => {
+    if (!isAgentCompatibleProvider(option.provider)) {
+      console.warn(`[Agent 选择] 已忽略不兼容渠道: ${option.channelName} (${option.provider})`)
+      return
+    }
     setSessionChannelMap((prev) => { const map = new Map(prev); map.set(sessionId, option.channelId); return map })
     setSessionModelMap((prev) => { const map = new Map(prev); map.set(sessionId, option.modelId); return map })
     const updated = agentChannelIds.includes(option.channelId) ? agentChannelIds : [...agentChannelIds, option.channelId]
@@ -181,20 +196,37 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
   React.useEffect(() => {
     if (channels.length === 0) return
 
-    const visibleChannels = channels.filter((channel) =>
-      channel.enabled && (agentChannelIds.length === 0 || agentChannelIds.includes(channel.id)),
-    )
-    if (visibleChannels.length === 0) return
+    logProjectInfo('MODEL-LOAD', 'AgentView 读取 Agent 配置', {
+      sessionId,
+      defaultChannelId,
+      defaultModelId,
+      agentChannelId,
+      agentModelId,
+      agentChannelIds,
+      visibleChannelIds: agentVisibleChannels.map((channel) => channel.id),
+    })
+  }, [
+    sessionId,
+    channels.length,
+    defaultChannelId,
+    defaultModelId,
+    agentChannelId,
+    agentModelId,
+    agentChannelIds,
+    agentVisibleChannels,
+  ])
 
-    const currentChannel = visibleChannels.find((channel) => channel.id === agentChannelId)
+  React.useEffect(() => {
+    if (channels.length === 0) return
+    if (agentVisibleChannels.length === 0) return
+
+    const currentChannel = agentVisibleChannels.find((channel) => channel.id === agentChannelId)
     const currentModelEnabled = currentChannel?.models.some(
       (model) => model.enabled && model.id === agentModelId,
     ) ?? false
     if (currentChannel && currentModelEnabled) return
 
-    const fallbackChannel =
-      currentChannel ??
-      visibleChannels.find((channel) => channel.models.some((model) => model.enabled))
+    const fallbackChannel = agentVisibleChannels.find((channel) => channel.models.some((model) => model.enabled))
     const fallbackModel = fallbackChannel?.models.find((model) => model.enabled)
     if (!fallbackChannel || !fallbackModel) return
 
@@ -210,35 +242,27 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     })
     setDefaultChannelId(fallbackChannel.id)
     setDefaultModelId(fallbackModel.id)
-
-    const nextChannelIds = agentChannelIds.includes(fallbackChannel.id)
-      ? agentChannelIds
-      : [...agentChannelIds, fallbackChannel.id]
-    if (nextChannelIds !== agentChannelIds) {
-      setAgentChannelIds(nextChannelIds)
-    }
-
     window.electronAPI.updateSettings({
       agentChannelId: fallbackChannel.id,
       agentModelId: fallbackModel.id,
-      agentChannelIds: nextChannelIds,
+      agentChannelIds,
     }).catch(console.error)
   }, [
-    sessionId,
-    channels,
+    channels.length,
+    agentVisibleChannels,
     agentChannelId,
     agentModelId,
     agentChannelIds,
+    sessionId,
     setSessionChannelMap,
     setSessionModelMap,
     setDefaultChannelId,
     setDefaultModelId,
-    setAgentChannelIds,
   ])
 
   // ---- 工具栏 ----
   const inputToolbarItems = React.useMemo<ToolbarItem[]>(() => [
-    { key: 'model', node: <ModelSelector externalSelectedModel={externalSelectedModel} onModelSelect={handleModelSelect} /> },
+    { key: 'model', node: <ModelSelector externalSelectedModel={externalSelectedModel} filterChannelIds={agentVisibleChannelIds} onModelSelect={handleModelSelect} /> },
     { key: 'permission-mode', node: <PermissionModeSelector sessionId={sessionId} /> },
     { key: 'thinking', node: <AgentThinkingPopover agentThinking={agentThinking} onToggle={handleToggleThinking} /> },
     { key: 'speech', node: <SpeechButton className="size-[36px] shrink-0 rounded-full" /> },
@@ -254,6 +278,7 @@ export function AgentView({ sessionId }: { sessionId: string }): React.ReactElem
     },
     { key: 'auto-preview', node: <DisplayOptionsPopover autoPreviewEnabled={autoPreviewEnabled} processGroupsKeepExpanded={processGroupsKeepExpanded} onAutoPreviewChange={setAutoPreviewEnabled} onProcessGroupsKeepExpandedChange={setProcessGroupsKeepExpanded} /> },
   ], [externalSelectedModel, handleModelSelect, agentThinking, handleToggleThinking,
+      agentVisibleChannelIds,
       fileAttach.attachFromDialog, fileAttach.attachFolder, contextStatus, sessionLoad.streaming, stopHook.compact,
       autoPreviewEnabled, processGroupsKeepExpanded, setAutoPreviewEnabled, setProcessGroupsKeepExpanded, agentModelId])
 

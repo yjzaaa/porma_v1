@@ -47,6 +47,12 @@ import {
 import { registerPendingTitle } from '@/hooks/useGlobalChatListeners'
 import { draftSessionIdsAtom } from '@/atoms/draft-session-atoms'
 import { cn } from '@/lib/utils'
+import { logProjectInfo, logProjectWarn } from '@/lib/project-log'
+import {
+  isSelectedModelAvailable,
+  resolvePreferredChatModel,
+  type SelectedModelSnapshot,
+} from '@/lib/model-policy'
 import type {
   ChatMessage,
   ChatSendInput,
@@ -84,6 +90,7 @@ function ChatViewInner({ conversationId }: ChatViewProps): React.ReactElement {
   // ===== 全局 atoms（Map 结构，按 conversationId 读取） =====
   const conversations = useAtomValue(conversationsAtom)
   const channels = useAtomValue(channelsAtom)
+  const conversationModels = useAtomValue(conversationModelsAtom)
   const setDraftSessionIds = useSetAtom(draftSessionIdsAtom)
   const streamingStates = useAtomValue(streamingStatesAtom)
   const setStreamingStates = useSetAtom(streamingStatesAtom)
@@ -178,42 +185,110 @@ function ChatViewInner({ conversationId }: ChatViewProps): React.ReactElement {
   // 从对话元数据恢复模型/渠道选择（写入 per-conversation Map）
   const conversationChannelId = conversation?.channelId
   const conversationModelId = conversation?.modelId
-  React.useEffect(() => {
-    if (conversationChannelId && conversationModelId) {
-      setConversationModels((prev) => {
-        const map = new Map(prev)
-        map.set(conversationId, {
-          channelId: conversationChannelId,
-          modelId: conversationModelId,
-        })
-        return map
-      })
+  const conversationModelSelection = React.useMemo<SelectedModelSnapshot | null>(() => {
+    if (!conversationChannelId || !conversationModelId) return null
+    return {
+      channelId: conversationChannelId,
+      modelId: conversationModelId,
     }
-  }, [conversationId, conversationChannelId, conversationModelId, setConversationModels])
-
+  }, [conversationChannelId, conversationModelId])
+  const preferredChatModel = React.useMemo(() => resolvePreferredChatModel(channels), [channels])
   React.useEffect(() => {
-    if (channels.length === 0) return
-    if (!selectedModel) return
+    const currentConversationSelection = conversationModels.get(conversationId) ?? null
+    logProjectInfo('MODEL-LOAD', 'ChatView 恢复模型', {
+      conversationId,
+      conversationChannelId: conversationChannelId ?? null,
+      conversationModelId: conversationModelId ?? null,
+      preferredChannelId: preferredChatModel?.channelId ?? null,
+      preferredModelId: preferredChatModel?.modelId ?? null,
+      selectedModel,
+      channelCount: channels.length,
+    })
+    if (conversationModelSelection && isSelectedModelAvailable(channels, conversationModelSelection)) {
+      if (
+       currentConversationSelection?.channelId !== conversationModelSelection.channelId ||
+       currentConversationSelection?.modelId !== conversationModelSelection.modelId
+      ) {
+       setConversationModels((prev) => {
+         const map = new Map(prev)
+         map.set(conversationId, {
+           channelId: conversationModelSelection.channelId,
+           modelId: conversationModelSelection.modelId,
+         })
+         return map
+       })
+      }
+      return
+    }
 
-    const selectedChannel = channels.find((channel) => channel.id === selectedModel.channelId)
-    const selectedModelEnabled = selectedChannel?.enabled
-      ? selectedChannel.models.some((model) => model.enabled && model.id === selectedModel.modelId)
-      : false
-    if (selectedModelEnabled) return
+    if (conversationModelSelection && preferredChatModel) {
+      if (
+       currentConversationSelection?.channelId !== preferredChatModel.channelId ||
+       currentConversationSelection?.modelId !== preferredChatModel.modelId
+      ) {
+       setConversationModels((prev) => {
+         const map = new Map(prev)
+         map.set(conversationId, preferredChatModel)
+         return map
+       })
+      }
+      if (
+       selectedModel?.channelId !== preferredChatModel.channelId ||
+       selectedModel?.modelId !== preferredChatModel.modelId
+      ) {
+       setSelectedModel(preferredChatModel)
+       localStorage.setItem('proma-selected-model', JSON.stringify(preferredChatModel))
+       window.electronAPI.updateConversationModel(conversationId, preferredChatModel.modelId, preferredChatModel.channelId).catch(console.error)
+      }
+      return
+    }
 
-    const fallbackChannel = channels.find((channel) =>
-      channel.enabled && channel.models.some((model) => model.enabled),
-    )
-    const fallbackModel = fallbackChannel?.models.find((model) => model.enabled)
-    if (!fallbackChannel || !fallbackModel) {
+    if (isSelectedModelAvailable(channels, selectedModel)) return
+
+    if (!preferredChatModel) {
+      logProjectWarn('MODEL-LOAD', 'ChatView 未找到可用模型，清空选择', {
+       conversationId,
+       selectedModel,
+      })
       setSelectedModel(null)
       return
     }
-    setSelectedModel({
-      channelId: fallbackChannel.id,
-      modelId: fallbackModel.id,
+
+    logProjectInfo('MODEL-LOAD', 'ChatView 使用兜底模型', {
+      conversationId,
+      channelId: preferredChatModel.channelId,
+      modelId: preferredChatModel.modelId,
     })
-  }, [channels, selectedModel, setSelectedModel])
+    if (
+      currentConversationSelection?.channelId !== preferredChatModel.channelId ||
+      currentConversationSelection?.modelId !== preferredChatModel.modelId
+    ) {
+      setConversationModels((prev) => {
+        const map = new Map(prev)
+        map.set(conversationId, preferredChatModel)
+        return map
+      })
+    }
+    if (
+      selectedModel?.channelId !== preferredChatModel.channelId ||
+      selectedModel?.modelId !== preferredChatModel.modelId
+    ) {
+      setSelectedModel(preferredChatModel)
+      localStorage.setItem('proma-selected-model', JSON.stringify(preferredChatModel))
+      window.electronAPI.updateConversationModel(conversationId, preferredChatModel.modelId, preferredChatModel.channelId).catch(console.error)
+    }
+  }, [
+    channels,
+    conversationId,
+    conversationModelSelection,
+    conversationChannelId,
+    conversationModelId,
+    conversationModels,
+    preferredChatModel,
+    selectedModel,
+    setConversationModels,
+    setSelectedModel,
+  ])
 
   const syncContextDividers = React.useCallback(async (
     convId: string,
