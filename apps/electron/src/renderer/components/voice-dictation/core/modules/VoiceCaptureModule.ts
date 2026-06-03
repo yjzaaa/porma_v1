@@ -6,12 +6,13 @@
 
 import type { VoiceEventLogger } from '../../ui-events'
 import type { VoiceDictationSettings } from '@/types/settings'
-import type { ASRProvider } from '../../types/asr'
-import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
-import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
-import type { VoiceAsrTransportBus } from '../bus/VoiceAsrTransportBus'
-import type { PcmFrame } from '../../types/panel'
-import { createASRProvider } from '../../asr/factory'
+import type { ASRProvider } from '../../shared/types/asr'
+import type { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
+import type { VoiceAsrTransportBus } from '../../shared/bus/VoiceAsrTransportBus'
+import type { VoiceDictationIpcBridge } from '../../shared/types/voice-dictation-ipc'
+import type { PcmFrame } from '../../shared/types/panel'
+import { createASRProvider } from '../../asr'
 import { AudioHub } from '../runtime/AudioHub'
 import { Session } from '../runtime/Session'
 import { VADDetector } from '../runtime/VADDetector'
@@ -21,7 +22,7 @@ import {
   SESSION_EVENT_METADATA,
   SESSION_EVENT_TRANSCRIPT,
   SESSION_EVENT_VOLUME,
-} from '../bus/SessionEventKeys'
+} from '../../shared/bus/SessionEventKeys'
 import { BaseVoiceModule } from './BaseVoiceModule'
 
 export class VoiceCaptureModule extends BaseVoiceModule {
@@ -47,6 +48,7 @@ export class VoiceCaptureModule extends BaseVoiceModule {
     bus: VoiceDomainEventBus,
     logger: VoiceEventLogger,
     transportBus: VoiceAsrTransportBus,
+    private readonly commitVoiceDictation: VoiceDictationIpcBridge['commitVoiceDictation'],
   ) {
     super(bus, logger)
     this.transportBus = transportBus
@@ -306,7 +308,7 @@ export class VoiceCaptureModule extends BaseVoiceModule {
 
     if (trimmed) {
       try {
-        const result = await window.electronAPI.commitVoiceDictation({ text: trimmed })
+        const result = await this.commitVoiceDictation({ text: trimmed })
         commitMessage = result.message
       } catch (error) {
         this.logger.error('提交语音文本失败', {

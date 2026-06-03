@@ -5,11 +5,11 @@
  */
 
 import type { VoiceDictationSettings } from '@/types/settings'
-import type { UIStateListener } from '../../types/panel'
-import type { IntelligentDecision } from '../../types/intelligence'
+import type { UIStateListener } from '../../shared/types/panel'
+import type { IntelligentDecision } from '../../shared/types/intelligence'
 import type { VoiceEventLogger } from '../../ui-events'
-import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
-import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
+import type { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
 import { VoiceState, VoiceStateMachine } from '../state/VoiceStateMachine'
 import { StateTransitionQueue } from '../state/StateTransitionQueue'
 import type { StateTransitionContext } from '../state/VoiceStateMachine'

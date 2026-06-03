@@ -55,7 +55,7 @@ import {
 } from '@/lib/shortcut-registry'
 import { getFileParentPath } from '@/lib/file-utils'
 import { onVoiceAutoSendRequested, onVoiceSettingsChanged } from '@/components/voice-dictation/ui-events'
-import { shouldAutoSend } from '@/components/voice-dictation/utils/auto-send'
+import { shouldAutoSend } from '@/components/voice-dictation/shared/utils/auto-send'
 
 /**
  * 快捷键初始化 + 全局 Handler 注册

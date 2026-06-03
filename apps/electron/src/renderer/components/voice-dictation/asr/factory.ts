@@ -10,10 +10,10 @@
  * @see WebSpeechProvider - 浏览器 Web Speech API 实现
  */
 
-import type { ASRProvider, ASRProviderType } from '../types/asr'
-import type { VoiceAsrTransportBus } from '../core/bus/VoiceAsrTransportBus'
-import { DoubaoProvider } from './doubao'
-import { WebSpeechProvider } from './webspeech'
+import type { ASRProvider, ASRProviderType } from '../shared/types/asr'
+import type { VoiceAsrTransportBus } from '../shared/bus/VoiceAsrTransportBus'
+import { DoubaoProvider } from './providers/doubao/index.ts'
+import { WebSpeechProvider } from './providers/webspeech/index.ts'
 
 /**
  * 创建 ASR Provider 实例

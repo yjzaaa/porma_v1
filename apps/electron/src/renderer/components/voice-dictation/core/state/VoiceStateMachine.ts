@@ -10,7 +10,7 @@
  *   4. 提供统一的状态变更通知接口
  */
 
-import type { VoiceUIState } from '../../types/panel'
+import type { VoiceUIState } from '../../shared/types/panel'
 import type { VoiceDictationSettings } from '@/types/settings'
 import {
   createVoiceEventLogger,

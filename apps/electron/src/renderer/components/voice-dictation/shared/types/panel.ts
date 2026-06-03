@@ -14,7 +14,7 @@
  * @see ../core/orchestrator/Orchestrator.ts - 状态机持有者与调度器
  */
 
-import type { VoiceDictationSettings } from '../../../../types'
+import type { VoiceDictationSettings } from '../../../../../types'
 
 /** PCM 音频帧（16-bit 单声道），由 AudioHub 采集并广播给所有订阅者 */
 export interface PcmFrame {

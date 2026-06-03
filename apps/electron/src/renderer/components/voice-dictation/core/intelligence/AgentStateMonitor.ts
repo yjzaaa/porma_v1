@@ -1,5 +1,5 @@
-import type { AgentContext } from '../../types/intelligence'
-import { AgentLoopState } from '../../types/intelligence'
+import type { AgentContext } from '../../shared/types/intelligence'
+import { AgentLoopState } from '../../shared/types/intelligence'
 import {
   createVoiceEventLogger,
   VoiceLogEventEmitter,

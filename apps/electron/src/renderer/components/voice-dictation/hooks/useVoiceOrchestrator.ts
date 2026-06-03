@@ -20,9 +20,10 @@
 import * as React from 'react'
 import { useStore } from 'jotai'
 import { Orchestrator } from '../core/orchestrator/Orchestrator'
-import { VoiceAsrTransportBus } from '../core/bus/VoiceAsrTransportBus'
-import type { VoiceAsrTransportRequest } from '../core/bus/VoiceAsrTransportBus'
-import type { VoiceUIState } from '../types/panel'
+import { VoiceAsrTransportBus } from '../shared/bus/VoiceAsrTransportBus'
+import type { VoiceAsrTransportRequest } from '../shared/bus/VoiceAsrTransportBus'
+import type { VoiceDictationIpcBridge } from '../shared/types/voice-dictation-ipc'
+import type { VoiceUIState } from '../shared/types/panel'
 import type {
   VoiceDictationSettings,
   VoiceDictationStartInput,
@@ -74,6 +75,11 @@ export function useVoiceOrchestrator(): UseVoiceOrchestratorResult {
   React.useEffect(() => {
     // === 1. 创建 ASR 对外交互总线 ===
     const transportBus = new VoiceAsrTransportBus()
+    const ipcBridge: VoiceDictationIpcBridge = {
+      commitVoiceDictation: (input) => window.electronAPI.commitVoiceDictation(input),
+      stopAgent: (sessionId) => window.electronAPI.stopAgent(sessionId),
+      writeVoiceDictationLog: (logContent) => window.electronAPI.writeVoiceDictationLog(logContent),
+    }
 
     // === 2. 处理 ASR 传输请求 ===
     const requestTimeoutMs = {
@@ -186,7 +192,7 @@ export function useVoiceOrchestrator(): UseVoiceOrchestratorResult {
     })
 
     // === 5. 创建 Orchestrator ===
-    const orch = new Orchestrator(transportBus)
+    const orch = new Orchestrator(transportBus, ipcBridge)
     orchRef.current = orch
 
     // === 订阅 UI 状态变更 ===

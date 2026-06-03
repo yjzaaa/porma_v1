@@ -2,7 +2,7 @@
  * 语音模块日志事件（统一定义）
  */
 
-import { createLogger, type VoiceLogger } from '../utils/logger'
+import { createLogger, type VoiceLogger, type VoiceLoggerOptions } from '../utils/logger'
 
 export type VoiceLogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -53,8 +53,8 @@ export class VoiceLogEventSubscriber {
   private readonly logger: VoiceLogger
   private readonly unsubscribe: () => void
 
-  constructor(module: string, emitter: VoiceLogEventEmitter) {
-    this.logger = createLogger(module)
+  constructor(module: string, emitter: VoiceLogEventEmitter, loggerOptions?: VoiceLoggerOptions) {
+    this.logger = createLogger(module, loggerOptions)
     this.unsubscribe = emitter.onEvent((event) => this.write(event))
   }
 

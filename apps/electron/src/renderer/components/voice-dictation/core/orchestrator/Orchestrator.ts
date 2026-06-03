@@ -13,24 +13,25 @@
  */
 
 import type { VoiceDictationSettings } from '@/types/settings'
-import type { UIStateListener } from '../../types/panel'
+import type { UIStateListener } from '../../shared/types/panel'
 import type { VoiceLogEventListener, VoiceEventLogger } from '../../ui-events'
-import type { VoiceAsrTransportBus } from '../bus/VoiceAsrTransportBus'
+import type { VoiceAsrTransportBus } from '../../shared/bus/VoiceAsrTransportBus'
+import type { VoiceDictationIpcBridge } from '../../shared/types/voice-dictation-ipc'
 import {
   createVoiceEventLogger,
   emitVoiceAutoSendRequested,
   VoiceLogEventEmitter,
   VoiceLogEventSubscriber,
 } from '../../ui-events'
-import { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
-import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
+import { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
 import { VoiceAgentModule } from '../modules/VoiceAgentModule'
 import { VoiceCaptureModule } from '../modules/VoiceCaptureModule'
 import { VoiceDecisionModule } from '../modules/VoiceDecisionModule'
 import { VoiceRuntimeStateModule } from '../modules/VoiceRuntimeStateModule'
 import { VoiceCommandExecutionModule } from '../modules/VoiceCommandExecutionModule'
 import { VoiceActionHandlerModule } from '../modules/VoiceActionHandlerModule'
-import type { AgentStateUpdatePayload } from '../bus/VoiceDomainEventBus'
+import type { AgentStateUpdatePayload } from '../../shared/bus/VoiceDomainEventBus'
 
 function createScopedLogger(prefix: string, logger: VoiceEventLogger): VoiceEventLogger {
   return {
@@ -47,7 +48,7 @@ export class Orchestrator {
   /** 统一日志事件发射器 */
   private readonly eventEmitter = new VoiceLogEventEmitter()
   /** 日志写入订阅器 */
-  private readonly eventLogger = new VoiceLogEventSubscriber('VoiceRuntime', this.eventEmitter)
+  private readonly eventLogger: VoiceLogEventSubscriber
   /** 根日志器 */
   private readonly logger = createVoiceEventLogger(this.eventEmitter)
   /** 统一领域事件总线 */
@@ -64,7 +65,15 @@ export class Orchestrator {
   constructor(
     /** ASR 对外交互总线（由外部 Hook 注入） */
     private readonly transportBus: VoiceAsrTransportBus,
+    /** hook 层实现的语音 IPC 桥接 */
+    private readonly ipcBridge: VoiceDictationIpcBridge,
   ) {
+    this.eventLogger = new VoiceLogEventSubscriber(
+      'VoiceRuntime',
+      this.eventEmitter,
+      { writeLogFile: this.ipcBridge.writeVoiceDictationLog },
+    )
+
     // 按依赖顺序初始化模块
     this.stateModule = new VoiceRuntimeStateModule(
       this.bus,
@@ -80,6 +89,7 @@ export class Orchestrator {
       this.bus,
       createScopedLogger('🎤 CaptureModule', this.logger),
       this.transportBus,
+      this.ipcBridge.commitVoiceDictation,
     )
 
     this.decisionModule = new VoiceDecisionModule(
@@ -99,6 +109,7 @@ export class Orchestrator {
       this.captureModule,
       this.agentModule,
       createScopedLogger('🎯 ActionModule', this.logger),
+      this.ipcBridge.stopAgent,
     )
 
     this.logger.info('🏗️ 初始化语音运行时')

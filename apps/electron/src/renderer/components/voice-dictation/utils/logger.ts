@@ -3,15 +3,22 @@
  *
  * 提供统一的日志格式和级别管理，支持文件日志
  */
+export interface VoiceLoggerOptions {
+  /** 写入语音模块日志文件的回调，由 hook 层注入 */
+  writeLogFile?: (logContent: string) => Promise<void>
+}
+
 export class VoiceLogger {
   private module: string
   private enabled: boolean = true
   private logFileEnabled: boolean = true
   private logBuffer: string[] = []
   private flushTimer: ReturnType<typeof setInterval> | null = null
+  private readonly writeLogFile?: (logContent: string) => Promise<void>
 
-  constructor(module: string) {
+  constructor(module: string, options: VoiceLoggerOptions = {}) {
     this.module = module
+    this.writeLogFile = options.writeLogFile
     // 启动日志文件写入
     this.initFileLogging()
   }
@@ -38,10 +45,7 @@ export class VoiceLogger {
     this.logBuffer = []
 
     try {
-      // 通过IPC写入日志文件
-      if (window.electronAPI?.writeVoiceDictationLog) {
-        await window.electronAPI.writeVoiceDictationLog(logs)
-      }
+      await this.writeLogFile?.(logs)
     } catch (error) {
       console.error('[VoiceLogger] 写入日志文件失败:', error)
     }
@@ -151,6 +155,6 @@ export enum LogLevel {
 /**
  * 创建模块专用logger
  */
-export function createLogger(module: string): VoiceLogger {
-  return new VoiceLogger(module)
+export function createLogger(module: string, options?: VoiceLoggerOptions): VoiceLogger {
+  return new VoiceLogger(module, options)
 }

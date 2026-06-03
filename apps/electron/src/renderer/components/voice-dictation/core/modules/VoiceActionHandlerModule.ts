@@ -5,8 +5,9 @@
  */
 
 import type { VoiceEventLogger } from '../../ui-events'
-import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
-import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
+import type { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
+import type { VoiceDictationIpcBridge } from '../../shared/types/voice-dictation-ipc'
 import { VoiceState } from '../state/VoiceStateMachine'
 import { VoiceAgentModule } from './VoiceAgentModule'
 import { VoiceCaptureModule } from './VoiceCaptureModule'
@@ -26,6 +27,7 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
     private readonly captureModule: VoiceCaptureModule,
     private readonly agentModule: VoiceAgentModule,
     logger: VoiceEventLogger,
+    private readonly stopAgent: VoiceDictationIpcBridge['stopAgent'],
   ) {
     super(bus, logger)
     this.on(VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText, ({ text, reasoning }) =>
@@ -171,7 +173,7 @@ export class VoiceActionHandlerModule extends BaseVoiceModule {
     }
 
     this.logger.info('调用stopAgent打断Agent', { sessionId, command })
-    window.electronAPI.stopAgent(sessionId).catch((error) => {
+    this.stopAgent(sessionId).catch((error) => {
       this.logger.error('打断Agent失败', {
         error: error instanceof Error ? error.message : '未知错误',
         sessionId,

@@ -4,11 +4,11 @@
  * 职责：将 ASR 转写结果转换为发送决策
  */
 
-import type { ASRProvider } from '../../types/asr'
-import type { UnifiedASRResult } from '../../types/intelligence'
+import type { ASRProvider } from '../../shared/types/asr'
+import type { UnifiedASRResult } from '../../shared/types/intelligence'
 import type { VoiceEventLogger } from '../../ui-events'
-import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
-import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
+import type { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
 import { UnifiedIntelligenceDetector } from '../intelligence/UnifiedIntelligenceDetector'
 import { VoiceAgentModule } from './VoiceAgentModule'
 import { BaseVoiceModule } from './BaseVoiceModule'

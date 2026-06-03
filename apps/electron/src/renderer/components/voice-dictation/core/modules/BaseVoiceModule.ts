@@ -10,7 +10,7 @@ import type {
   VoiceDomainEventListener,
   VoiceDomainEventMap,
   VoiceDomainEventType,
-} from '../bus/VoiceDomainEventBus'
+} from '../../shared/bus/VoiceDomainEventBus'
 
 /**
  * 统一模块抽象：

@@ -17,7 +17,7 @@
  * @see ../types/panel.ts - PcmFrame 定义
  */
 
-import type { PcmFrame } from '../../types/panel'
+import type { PcmFrame } from '../../shared/types/panel'
 
 /** VAD 内部状态 */
 type VADState = 'silence' | 'speech' | 'hangover'

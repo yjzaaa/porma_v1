@@ -17,16 +17,16 @@
  * @see ../types/asr.ts - ASRProvider 接口
  */
 
-import type { PcmFrame } from '../../types/panel'
-import type { ASRProvider } from '../../types/asr'
-import { SessionEventBus } from '../bus/SessionEventBus'
+import type { PcmFrame } from '../../shared/types/panel'
+import type { ASRProvider } from '../../shared/types/asr'
+import { SessionEventBus } from '../../shared/bus/SessionEventBus'
 import {
   SESSION_EVENT_COMPLETE,
   SESSION_EVENT_ERROR,
   SESSION_EVENT_METADATA,
   SESSION_EVENT_TRANSCRIPT,
   SESSION_EVENT_VOLUME,
-} from '../bus/SessionEventKeys'
+} from '../../shared/bus/SessionEventKeys'
 
 export class Session {
   /** ASR Provider 引用 */

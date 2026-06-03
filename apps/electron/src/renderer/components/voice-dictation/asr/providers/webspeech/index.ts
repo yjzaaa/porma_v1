@@ -17,9 +17,9 @@
  * @see ../types/asr.ts - ASRProvider 接口定义
  */
 
-import type { ASRProvider, ASREventListener } from '../types/asr'
-import { ASREventBus } from '../types/asr'
-import type { PcmFrame } from '../types/panel'
+import type { ASRProvider, ASREventListener } from '../../../shared/types/asr'
+import { createASREventBus, subscribeASREvents } from '../../../shared/types/asr'
+import type { PcmFrame } from '../../../shared/types/panel'
 
 /** Web Speech API 类型 shim（TS 内置类型中未完整包含） */
 interface SpeechRecognition_ {
@@ -41,7 +41,7 @@ const SpeechCtor = ((window as any).SpeechRecognition ?? (window as any).webkitS
 
 export class WebSpeechProvider implements ASRProvider {
   /** ASR 事件总线 */
-  private readonly eventBus = new ASREventBus()
+  private readonly eventBus = createASREventBus()
   /** 当前 Recognition 实例 */
   private recognition: SpeechRecognition_ | null = null
   /** 累积的最终识别文本 */
@@ -52,14 +52,7 @@ export class WebSpeechProvider implements ASRProvider {
   private userStopped = false
 
   onEvent(listener: ASREventListener): () => void {
-    const unsubs = [
-      this.eventBus.on('state', listener),
-      this.eventBus.on('transcript', listener),
-      this.eventBus.on('volume', listener),
-      this.eventBus.on('end', listener),
-      this.eventBus.on('error', listener),
-    ]
-    return () => unsubs.forEach((unsub) => unsub())
+    return subscribeASREvents(this.eventBus, listener)
   }
 
   /**

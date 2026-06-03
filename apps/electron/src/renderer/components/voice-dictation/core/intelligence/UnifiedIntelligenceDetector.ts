@@ -7,8 +7,8 @@
  *   3. WebSpeech：基于 isFinal + 启发式增强
  *   4. 即时指令识别（通用）
  */
-import type { UnifiedASRResult, AgentContext, IntelligentDecision } from '../../types/intelligence'
-import { AgentLoopState } from '../../types/intelligence'
+import type { UnifiedASRResult, AgentContext, IntelligentDecision } from '../../shared/types/intelligence'
+import { AgentLoopState } from '../../shared/types/intelligence'
 import {
   createVoiceEventLogger,
   VoiceLogEventEmitter,

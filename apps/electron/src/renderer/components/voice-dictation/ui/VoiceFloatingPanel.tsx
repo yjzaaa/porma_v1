@@ -19,7 +19,7 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, Check } from 'lucide-react'
 import { useVoiceOrchestrator } from '../hooks/useVoiceOrchestrator'
-import type { VoiceUIState } from '../types/panel'
+import type { VoiceUIState } from '../shared/types/panel'
 
 /**
  * 语音浮动面板组件

@@ -5,8 +5,8 @@
  */
 
 import type { VoiceDictationSettings } from '@/types/settings'
-import type { ASRProvider } from '../../types/asr'
-import type { IntelligentDecision } from '../../types/intelligence'
+import type { ASRProvider } from '../types/asr'
+import type { IntelligentDecision } from '../types/intelligence'
 import {
   VOICE_ACTION_HANDLE_IMMEDIATE_INSTRUCTION_EVENT,
   VOICE_ACTION_SEND_VOICE_TEXT_EVENT,
@@ -30,6 +30,7 @@ import {
   VOICE_SESSION_VOLUME_EVENT,
   VOICE_DOMAIN_EVENT_KEYS,
 } from './VoiceDomainEventKeys'
+import { AbstractTypedEventBus, type TypedListenerMap } from './AbstractTypedEventBus'
 
 export interface AgentStateUpdatePayload {
   /** 当前模式（Agent / Chat） */
@@ -108,12 +109,19 @@ export type VoiceDomainEventListener<K extends VoiceDomainEventType> = (
 ) => void
 
 /**
- * 统一事件总线
+ * 语音领域事件总线
+ *
+ * 这里承载跨模块协作的命令和状态事件：
+ * - command.*：Facade / Orchestrator 发出的操作命令
+ * - handsfree.*：采集链路生命周期
+ * - session.*：录音会话生命周期
+ * - decision.*：智能决策结果
+ * - action.*：最终执行动作
  */
-export class VoiceDomainEventBus {
-  private readonly listeners: {
-    [K in VoiceDomainEventType]: Set<VoiceDomainEventListener<K>>
-  } = {
+export class VoiceDomainEventBus extends AbstractTypedEventBus<VoiceDomainEventMap> {
+  constructor() {
+    super({
+      // 外部命令入口，通常由 Orchestrator 统一发布。
       [VOICE_DOMAIN_EVENT_KEYS.command.toggleHandsfree]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.command.stopRecording]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.command.updateAgentState]: new Set(),
@@ -121,10 +129,12 @@ export class VoiceDomainEventBus {
       [VOICE_DOMAIN_EVENT_KEYS.command.setAgentSessionId]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.command.destroy]: new Set(),
 
+      // 免提采集链路的生命周期结果。
       [VOICE_DOMAIN_EVENT_KEYS.handsfree.enabled]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.handsfree.disabled]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.handsfree.failed]: new Set(),
 
+      // 单次录音会话的过程事件和结果事件。
       [VOICE_DOMAIN_EVENT_KEYS.session.started]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.session.volume]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.session.transcript]: new Set(),
@@ -132,41 +142,14 @@ export class VoiceDomainEventBus {
       [VOICE_DOMAIN_EVENT_KEYS.session.complete]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.session.error]: new Set(),
 
+      // 智能决策模块的反馈与执行。
       [VOICE_DOMAIN_EVENT_KEYS.decision.feedback]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.decision.execute]: new Set(),
 
+      // 最终动作层：发送文本、处理即时指令、桥接 UI。
       [VOICE_DOMAIN_EVENT_KEYS.action.sendVoiceText]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.action.handleImmediateInstruction]: new Set(),
       [VOICE_DOMAIN_EVENT_KEYS.ui.autoSendRequested]: new Set(),
-    }
-
-  /**
-   * 订阅指定事件
-   *
-   * @returns 取消订阅函数
-   */
-  on<K extends VoiceDomainEventType>(event: K, listener: VoiceDomainEventListener<K>): () => void {
-    const set = this.listeners[event]
-    set.add(listener)
-    return () => set.delete(listener)
-  }
-
-  /**
-   * 发布指定事件
-   */
-  emit<K extends VoiceDomainEventType>(event: K, payload: VoiceDomainEventMap[K]): void {
-    const set = this.listeners[event]
-    for (const listener of set) {
-      listener(payload)
-    }
-  }
-
-  /**
-   * 清空所有事件监听器
-   */
-  clear(): void {
-    ;(Object.keys(this.listeners) as VoiceDomainEventType[]).forEach((key) => {
-      this.listeners[key].clear()
-    })
+    } satisfies TypedListenerMap<VoiceDomainEventMap>)
   }
 }

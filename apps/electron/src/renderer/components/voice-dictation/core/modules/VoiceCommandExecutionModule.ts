@@ -5,9 +5,9 @@
  */
 
 import type { VoiceEventLogger } from '../../ui-events'
-import type { IntelligentDecision } from '../../types/intelligence'
-import type { VoiceDomainEventBus } from '../bus/VoiceDomainEventBus'
-import { VOICE_DOMAIN_EVENT_KEYS } from '../bus/VoiceDomainEventKeys'
+import type { IntelligentDecision } from '../../shared/types/intelligence'
+import type { VoiceDomainEventBus } from '../../shared/bus/VoiceDomainEventBus'
+import { VOICE_DOMAIN_EVENT_KEYS } from '../../shared/bus/VoiceDomainEventKeys'
 import { BaseVoiceModule } from './BaseVoiceModule'
 
 export class VoiceCommandExecutionModule extends BaseVoiceModule {

@@ -13,7 +13,7 @@
  *   - 异常隔离：单个订阅者异常不影响其他订阅者
  */
 
-import type { PcmFrame, PcmSubscriber } from '../../types/panel'
+import type { PcmFrame, PcmSubscriber } from '../../shared/types/panel'
 
 /** AudioContext 引用（兼容 WebKit 前缀） */
 const ACTX = (window as any).AudioContext ?? (window as any).webkitAudioContext as typeof AudioContext | undefined

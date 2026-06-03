@@ -4,7 +4,7 @@
  * 在 GlobalShortcuts 中更新，被 HandsfreeButton 消费。
  */
 import { atom } from 'jotai'
-import type { DetectorState } from '@/components/voice-dictation/types/panel'
+import type { DetectorState } from '@/components/voice-dictation/shared/types/panel'
 
 export interface HandsfreeState {
   /** 免提模式是否启用 */

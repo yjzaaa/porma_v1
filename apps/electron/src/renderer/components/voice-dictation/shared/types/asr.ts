@@ -1,4 +1,5 @@
 import type { PcmFrame } from './panel'
+import { TypedEventBus, type TypedListenerMap } from '../bus/TypedEventBus'
 
 /**
  * 语音模块 — ASR Provider 类型定义
@@ -38,47 +39,40 @@ export type ASREventType = keyof ASREventMap
 /** ASR 事件监听器 */
 export type ASREventListener = (event: ASREvent) => void
 
-/** ASR 事件总线 */
-export class ASREventBus {
-  private readonly listeners: {
-    [K in ASREventType]: Set<ASREventListener>
-  } = {
+/**
+ * 创建 ASR 事件总线
+ *
+ * 这里直接复用 shared/bus 的通用事件总线抽象，不再维护 ASR 专用总线类。
+ */
+export function createASREventBus(): TypedEventBus<ASREventMap> {
+  const listeners: TypedListenerMap<ASREventMap> = {
     state: new Set(),
     transcript: new Set(),
     volume: new Set(),
     end: new Set(),
     error: new Set(),
   }
+  return new TypedEventBus(listeners)
+}
 
-  /**
-   * 订阅事件
-   */
-  on<K extends ASREventType>(event: K, listener: ASREventListener): () => void {
-    const set = this.listeners[event]
-    set.add(listener)
-    return () => set.delete(listener)
-  }
-
-  /**
-   * 发布事件
-   */
-  emit<K extends ASREventType>(event: K, payload: ASREventMap[K]): void {
-    const set = this.listeners[event]
-    for (const listener of set) {
-      listener({ type: event, ...payload } as ASREvent)
-    }
-  }
-
-  /**
-   * 清空所有监听器
-   */
-  clear(): void {
-    this.listeners.state.clear()
-    this.listeners.transcript.clear()
-    this.listeners.volume.clear()
-    this.listeners.end.clear()
-    this.listeners.error.clear()
-  }
+/**
+ * 将 map 形式的事件总线桥接成 ASR 事件联合监听器。
+ *
+ * Provider 内部的总线只关心 payload，外部 onEvent 需要看到的是统一的
+ * { type, ...payload } 联合事件，因此这里集中做一次映射。
+ */
+export function subscribeASREvents(
+  eventBus: TypedEventBus<ASREventMap>,
+  listener: ASREventListener,
+): () => void {
+  const unsubs = [
+    eventBus.on('state', (payload) => listener({ type: 'state', ...payload })),
+    eventBus.on('transcript', (payload) => listener({ type: 'transcript', ...payload })),
+    eventBus.on('volume', (payload) => listener({ type: 'volume', ...payload })),
+    eventBus.on('end', (payload) => listener({ type: 'end', ...payload })),
+    eventBus.on('error', (payload) => listener({ type: 'error', ...payload })),
+  ]
+  return () => unsubs.forEach((unsub) => unsub())
 }
 
 /** 可用的 ASR Provider 类型 */
